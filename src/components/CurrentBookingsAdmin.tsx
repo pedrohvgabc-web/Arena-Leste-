@@ -188,8 +188,8 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => arenaNow().date);
   const [working, setWorking] = useState<string | null>(null);
-  const [lateCancelBooking, setLateCancelBooking] = useState<BookingGroup | null>(null);
-  const lateCancelDialogRef = useRef<HTMLDialogElement>(null);
+  const [cancelBookingToConfirm, setCancelBookingToConfirm] = useState<BookingGroup | null>(null);
+  const cancelDialogRef = useRef<HTMLDialogElement>(null);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | "all">("all");
   const rangeStart = arenaNow().date;
@@ -211,11 +211,11 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
     [query.data?.bookings],
   );
   useEffect(() => {
-    const dialog = lateCancelDialogRef.current;
+    const dialog = cancelDialogRef.current;
     if (!dialog) return;
-    if (lateCancelBooking && !dialog.open) dialog.showModal();
-    if (!lateCancelBooking && dialog.open) dialog.close();
-  }, [lateCancelBooking]);
+    if (cancelBookingToConfirm && !dialog.open) dialog.showModal();
+    if (!cancelBookingToConfirm && dialog.open) dialog.close();
+  }, [cancelBookingToConfirm]);
   const attentionRequired = groups.filter(
     (booking) => booking.status === "pending" || booking.paymentNeedsReview,
   ).length;
@@ -243,6 +243,7 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
     booking: BookingGroup,
     action: "mark_paid" | "cancel" | "confirm_received_payment",
     lateCancelConfirmed = false,
+    cancelConfirmed = false,
   ) {
     const question =
       action === "mark_paid"
@@ -250,12 +251,10 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
         : action === "confirm_received_payment"
           ? "A InfinitePay confirmou o pagamento. Verifique na InfinitePay se a cobrança não foi estornada e confira se os horários seguem livres; confirmar bloqueará novamente as quadras. Continuar?"
           : "Cancelar esta reserva e liberar todos os horários do grupo? Esta ação não estorna pagamentos; faça eventual estorno diretamente na InfinitePay.";
-    if (action === "cancel" && booking.cancellationDeadlinePassed) {
-      if (!lateCancelConfirmed) {
-        setLateCancelBooking(booking);
-        return;
-      }
-    } else if (!window.confirm(question)) return;
+    if (action === "cancel" && !cancelConfirmed) {
+      setCancelBookingToConfirm(booking);
+      return;
+    } else if (action !== "cancel" && !window.confirm(question)) return;
     setWorking(booking.code);
     try {
       const result = await updateBooking({
@@ -263,7 +262,7 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
       });
       if (!result.ok) {
         if ("requiresLateCancelConfirmation" in result && result.requiresLateCancelConfirmation) {
-          setLateCancelBooking(booking);
+          setCancelBookingToConfirm({ ...booking, cancellationDeadlinePassed: true });
           return;
         }
         toast.error(result.error);
@@ -271,6 +270,12 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
       }
       if (action === "cancel" && "noticeCreated" in result && result.noticeCreated === false) {
         toast.warning("Reserva cancelada, mas o aviso público da vaga não foi criado.");
+      } else if (
+        action === "cancel" &&
+        "noticeCreated" in result &&
+        result.noticeCreated === true
+      ) {
+        toast.success("Reserva cancelada. A vaga foi anunciada no site por até 12 horas.");
       } else {
         toast.success(
           action === "mark_paid"
@@ -579,57 +584,65 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
         )}
       </div>
       <dialog
-        ref={lateCancelDialogRef}
-        aria-labelledby="late-cancel-title"
-        aria-describedby="late-cancel-description"
+        ref={cancelDialogRef}
+        aria-labelledby="cancel-confirm-title"
+        aria-describedby="cancel-confirm-description"
         onCancel={(event) => {
           event.preventDefault();
-          setLateCancelBooking(null);
+          setCancelBookingToConfirm(null);
         }}
-        onClose={() => setLateCancelBooking(null)}
+        onClose={() => setCancelBookingToConfirm(null)}
         onClick={(event) => {
-          if (event.target === event.currentTarget) setLateCancelBooking(null);
+          if (event.target === event.currentTarget) setCancelBookingToConfirm(null);
         }}
         className="m-auto w-[min(92vw,32rem)] rounded-2xl border border-orange-500/30 bg-background p-0 text-foreground shadow-2xl backdrop:bg-black/70 backdrop:backdrop-blur-sm"
       >
         <div className="p-5 sm:p-7">
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-orange-700">
-            <AlertTriangle className="h-4 w-4" aria-hidden="true" /> Prazo de cancelamento
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            {cancelBookingToConfirm?.cancellationDeadlinePassed
+              ? "Prazo de cancelamento"
+              : "Liberar horário"}
           </p>
-          <h2 id="late-cancel-title" className="mt-3 font-display text-2xl font-bold">
+          <h2 id="cancel-confirm-title" className="mt-3 font-display text-2xl font-bold">
             Confirmar cancelamento?
           </h2>
           <p
-            id="late-cancel-description"
+            id="cancel-confirm-description"
             className="mt-3 text-sm leading-relaxed text-muted-foreground"
           >
-            Esta reserva já passou do prazo permitido para cancelamento. Deseja mesmo cancelar?
+            {cancelBookingToConfirm?.cancellationDeadlinePassed
+              ? "Esta reserva já passou do prazo permitido para cancelamento. Deseja mesmo cancelar?"
+              : "Ao cancelar, todos os horários desta reserva serão liberados e anunciados no site por até 12 horas. Esta ação não estorna pagamentos; faça eventual estorno diretamente na InfinitePay."}
           </p>
-          {lateCancelBooking && (
+          {cancelBookingToConfirm && (
             <p className="mt-3 rounded-xl border border-border bg-muted/40 p-3 text-sm">
-              {lateCancelBooking.spaceName} · {formatBookingDate(lateCancelBooking.date)} ·{" "}
-              {formatSlotRanges(lateCancelBooking.slots)}
+              {cancelBookingToConfirm.spaceName}
+              {" · "}
+              {formatBookingDate(cancelBookingToConfirm.date)}
+              {" · "}
+              {formatSlotRanges(cancelBookingToConfirm.slots)}
             </p>
           )}
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               className="min-h-11 rounded-full border border-border px-5 text-sm font-semibold hover:bg-muted"
-              onClick={() => setLateCancelBooking(null)}
+              onClick={() => setCancelBookingToConfirm(null)}
             >
-              Não, voltar
+              Voltar
             </button>
             <button
               type="button"
               className="min-h-11 rounded-full bg-destructive px-5 text-sm font-bold text-destructive-foreground hover:opacity-90"
-              disabled={working === lateCancelBooking?.code}
+              disabled={working === cancelBookingToConfirm?.code}
               onClick={() => {
-                const target = lateCancelBooking;
-                setLateCancelBooking(null);
-                if (target) void act(target, "cancel", true);
+                const target = cancelBookingToConfirm;
+                setCancelBookingToConfirm(null);
+                if (target) void act(target, "cancel", target.cancellationDeadlinePassed, true);
               }}
             >
-              {working === lateCancelBooking?.code ? "Cancelando…" : "Sim, cancelar"}
+              {working === cancelBookingToConfirm?.code ? "Cancelando…" : "Sim, cancelar reserva"}
             </button>
           </div>
         </div>

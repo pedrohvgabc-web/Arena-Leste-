@@ -70,7 +70,7 @@ type BookingResult = {
 type BookingDraft = { name: string; phone: string; cpf: string; address: string; notes: string };
 
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
-const PROMO_DISMISSED_KEY = "arena-leste-promo-dismissed-v1";
+const PROMO_DISMISSED_KEY = "arena-leste-promo-dismissed-v2";
 const METHODS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "pix", label: "Pix demonstrativo · sem cobrança real" },
   { value: "card_onsite", label: "Cartão no local" },

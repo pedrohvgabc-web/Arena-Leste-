@@ -307,6 +307,110 @@
   }
 }
 
+/* Promotion prompt on the booking flow */
+.booking-promo {
+  position: fixed;
+  z-index: 80;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  display: grid;
+  width: clamp(7rem, 28vw, 9rem);
+  aspect-ratio: 1;
+  place-items: center;
+  padding: 1rem;
+  border: 2px solid #fff1e8;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 25%, #ff9c61, #df4f07 62%, #a93300);
+  color: #fff;
+  box-shadow: 0 10px 32px rgb(72 27 4 / 35%), 0 0 0 5px rgb(223 79 7 / 20%);
+  font: 800 clamp(0.68rem, 2.5vw, 0.82rem) / 1.2 "Barlow Condensed", system-ui, sans-serif;
+  text-align: center;
+  text-wrap: balance;
+  cursor: pointer;
+  animation: booking-promo-pulse 2.6s ease-in-out infinite;
+}
+.booking-promo:hover {
+  transform: scale(1.04);
+}
+.booking-promo:focus-visible {
+  outline: 3px solid #1a1210;
+  outline-offset: 5px;
+}
+@keyframes booking-promo-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.045);
+  }
+}
+.booking-promo-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(92vw, 29rem);
+  max-width: none;
+  max-height: min(88dvh, 42rem);
+  margin: auto;
+  overflow: auto;
+  padding: clamp(1.4rem, 5vw, 2.2rem);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 1.5rem;
+  background: radial-gradient(circle at 90% 0%, #54240e, #1a1210 62%);
+  color: #fff9f2;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+}
+.booking-promo-dialog[open] {
+  animation: pop-in 240ms var(--ease-out-expo) both;
+}
+.booking-promo-dialog::backdrop {
+  background: rgb(12 9 8 / 70%);
+  backdrop-filter: blur(7px);
+}
+.booking-promo-dialog__stamp {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  margin-block: 1.2rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid rgb(255 156 97 / 55%);
+  border-radius: 999px;
+  background: rgb(223 79 7 / 18%);
+  color: #ffad7c;
+  font-weight: 800;
+}
+.booking-promo-dialog h2 {
+  margin-block: 0.55rem;
+  color: #ff8a4d;
+  font-size: clamp(2rem, 8vw, 3rem);
+  line-height: 0.95;
+}
+.booking-promo-dialog p {
+  color: #fff9f2;
+  line-height: 1.55;
+}
+.booking-promo-dialog__close {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 50%;
+  color: #fff;
+}
+.booking-promo-dialog__ok {
+  min-height: 2.9rem;
+  margin-top: 1.2rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .booking-promo {
+    animation: none;
+  }
+}
+
 /* Marquee ticker */
 @keyframes marquee {
   to {
