@@ -333,6 +333,15 @@ function RegistrationForm() {
         >
           <ArrowRight className="h-4 w-4" /> Continuar no WhatsApp
         </a>
+        <div className="photo-cta mt-8">
+          <h3>
+            Clique no botão para achar sua foto
+            <br />e postar nas redes sociais
+          </h3>
+          <Link className="btn" to="/fotos">
+            Ache aqui sua foto!
+          </Link>
+        </div>
       </div>
     );
   }

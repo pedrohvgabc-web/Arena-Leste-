@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as CancelamentoRouteImport } from './routes/cancelamento'
+import { Route as FotosRouteImport } from './routes/fotos'
 import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as ReservarRouteImport } from './routes/reservar'
 import { Route as TermosRouteImport } from './routes/termos'
@@ -33,6 +34,11 @@ const AdminRoute = AdminRouteImport.update({
 const CancelamentoRoute = CancelamentoRouteImport.update({
   id: '/cancelamento',
   path: '/cancelamento',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FotosRoute = FotosRouteImport.update({
+  id: '/fotos',
+  path: '/fotos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacidadeRoute = PrivacidadeRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/cancelamento': typeof CancelamentoRoute
+  '/fotos': typeof FotosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/reservar': typeof ReservarRoute
   '/termos': typeof TermosRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/cancelamento': typeof CancelamentoRoute
+  '/fotos': typeof FotosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/reservar': typeof ReservarRoute
   '/termos': typeof TermosRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/cancelamento': typeof CancelamentoRoute
+  '/fotos': typeof FotosRoute
   '/privacidade': typeof PrivacidadeRoute
   '/reservar': typeof ReservarRoute
   '/termos': typeof TermosRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/cancelamento'
+    | '/fotos'
     | '/privacidade'
     | '/reservar'
     | '/termos'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/cancelamento'
+    | '/fotos'
     | '/privacidade'
     | '/reservar'
     | '/termos'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/cancelamento'
+    | '/fotos'
     | '/privacidade'
     | '/reservar'
     | '/termos'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   CancelamentoRoute: typeof CancelamentoRoute
+  FotosRoute: typeof FotosRoute
   PrivacidadeRoute: typeof PrivacidadeRoute
   ReservarRoute: typeof ReservarRoute
   TermosRoute: typeof TermosRoute
@@ -182,6 +195,13 @@ declare module '@tanstack/react-router' {
       path: '/cancelamento'
       fullPath: '/cancelamento'
       preLoaderRoute: typeof CancelamentoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fotos': {
+      id: '/fotos'
+      path: '/fotos'
+      fullPath: '/fotos'
+      preLoaderRoute: typeof FotosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacidade': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   CancelamentoRoute: CancelamentoRoute,
+  FotosRoute: FotosRoute,
   PrivacidadeRoute: PrivacidadeRoute,
   ReservarRoute: ReservarRoute,
   TermosRoute: TermosRoute,

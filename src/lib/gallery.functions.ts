@@ -5,8 +5,8 @@ import { getDb } from "./db.server";
 import { requireAdmin } from "./admin-auth.server";
 
 const MAX_IMAGE_BYTES = 600 * 1024;
-const MAX_GALLERY_PHOTOS = 50;
-const MAX_ACTIVE_PHOTOS = 12;
+const MAX_GALLERY_PHOTOS = 1000;
+const MAX_ACTIVE_PHOTOS = 1000;
 const GALLERY_LOCK_ID = 731_904_112;
 
 const photoInputSchema = z.object({
@@ -32,6 +32,8 @@ const photoRowSchema = z.object({
 
 export type PhotoGalleryPhoto = {
   id: string;
+  eventSlug: string;
+  court: string;
   title: string;
   altText: string;
   sortOrder: number;
@@ -47,6 +49,8 @@ type PhotoRow = z.infer<typeof photoRowSchema>;
 function publicPhoto(row: PhotoRow) {
   return {
     id: String(row.id),
+    eventSlug: "novembro-azul-2026",
+    court: "Arena Leste",
     title: String(row.title),
     altText: String(row.alt_text),
     sortOrder: Number(row.sort_order),
@@ -132,7 +136,7 @@ export const adminUploadGalleryPhoto = createServerFn({ method: "POST" })
         `) as unknown as Array<{ total: number; active: number }>;
         const count = counts[0] ?? { total: 0, active: 0 };
         if (Number(count.total) >= MAX_GALLERY_PHOTOS) {
-          return { ok: false as const, error: "A galeria atingiu o limite de 50 fotos." };
+          return { ok: false as const, error: "A galeria atingiu o limite de 1000 fotos." };
         }
         const isActive = Number(count.active) < MAX_ACTIVE_PHOTOS;
         const rows = (await tx`
@@ -179,7 +183,7 @@ export const adminUpdateGalleryPhoto = createServerFn({ method: "POST" })
             SELECT count(*)::int AS active FROM public.arena_gallery_photos WHERE is_active = true
           `) as unknown as Array<{ active: number }>;
           if (Number(activeRows[0]?.active ?? 0) >= MAX_ACTIVE_PHOTOS) {
-            return { ok: false as const, error: "A galeria pública pode ter até 12 fotos ativas." };
+            return { ok: false as const, error: "A galeria pública atingiu o limite configurado." };
           }
         }
         await tx`
