@@ -7,6 +7,17 @@
   background: #17100c;
   color: #fff8f1;
 }
+.photo-landing-cta::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: clamp(5rem, 13vw, 12rem);
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, #050506 94%);
+}
 .photo-landing-cta__photo {
   position: absolute;
   inset: -3%;
@@ -24,7 +35,7 @@
 }
 .photo-landing-cta__content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   padding-block: clamp(4rem, 10svh, 8rem);
 }
 .photo-landing-cta__eyebrow {
@@ -36,7 +47,7 @@
   max-width: 12ch;
   margin: 0.7rem 0 1rem;
   color: #fff8f1;
-  font: 800 clamp(3rem, 9vw, 8rem)/0.84 var(--font-display);
+  font: 800 clamp(3rem, 9vw, 8rem) / 0.84 var(--font-display);
   text-transform: uppercase;
   text-wrap: balance;
 }

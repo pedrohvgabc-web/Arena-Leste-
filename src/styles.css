@@ -898,3 +898,117 @@
     pointer-events: none;
   }
 }
+
+/* FlipCard photo interaction */
+.photo-flip-wrap {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+.photo-flip-card {
+  width: 100%;
+  max-width: 320px;
+}
+.photo-flip-face {
+  position: relative;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.photo-flip-face--front {
+  justify-content: flex-end;
+  background: #17100c;
+}
+.photo-flip-face--front img {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-flip-face--front::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  content: "";
+  background: linear-gradient(180deg, rgb(18 15 23 / 0.08) 38%, rgb(18 15 23 / 0.92) 100%);
+}
+.photo-flip-face--front small,
+.photo-flip-face--front strong,
+.photo-flip-hint {
+  position: relative;
+  z-index: 2;
+}
+.photo-flip-face--front small {
+  align-self: flex-start;
+  margin: 0.75rem;
+  border-radius: 999px;
+  background: rgb(18 15 23 / 0.72);
+  padding: 0.22rem 0.65rem;
+  color: #fff8f1;
+  font-size: 0.72rem;
+}
+.photo-flip-face--front strong {
+  padding: 0 1rem;
+  color: #fff8f1;
+  font: 700 1.35rem/1 var(--font-display);
+  text-transform: uppercase;
+}
+.photo-flip-hint {
+  padding: 0.55rem 1rem 1rem;
+  color: #ffad72;
+  font-size: 0.76rem;
+}
+.photo-flip-face--back {
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1rem;
+  background: radial-gradient(circle at 85% 15%, rgb(255 154 61 / 0.34), transparent 38%), #17100c;
+  padding: 1.4rem;
+  color: #fff8f1;
+}
+.photo-flip-face--back .mono {
+  color: #ffad72;
+  font-size: 0.72rem;
+}
+.photo-flip-face--back h2 {
+  margin: 0;
+  font: 800 2.4rem/0.9 var(--font-display);
+  text-transform: uppercase;
+}
+.photo-flip-face--back p {
+  margin: 0;
+  color: rgb(255 248 241 / 0.78);
+}
+.photo-download--large {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: var(--primary);
+  padding: 0.7rem 1rem;
+  color: white;
+  font-weight: 700;
+}
+.photo-download--large:hover {
+  background: #ff7a33;
+}
+
+.photos-page::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: clamp(8rem, 20vw, 18rem);
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, #050506 92%);
+}
+.photos-page__content {
+  padding-bottom: clamp(8rem, 16vw, 14rem);
+}

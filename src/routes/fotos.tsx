@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Download, ImageOff, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Grainient from "@/components/Grainient.jsx";
+import FlipCard from "@/components/FlipCard.jsx";
 import { getPublicGalleryPhotos, type PhotoGalleryPhoto } from "@/lib/gallery.functions";
 
 export const Route = createFileRoute("/fotos")({
@@ -120,26 +121,46 @@ function PhotosPage() {
           <>
             <div className="photo-grid mt-8" aria-live="polite">
               {shown.map((photo) => (
-                <figure className="photo-tile" key={photo.id}>
-                  <small>{photo.court}</small>
-                  <img
-                    src={photo.imageUrl}
-                    loading="lazy"
-                    decoding="async"
-                    alt={photo.altText || `Foto do jogo, ${photo.court}`}
+                <div className="photo-flip-wrap" key={photo.id}>
+                  <FlipCard
+                    className="photo-flip-card"
+                    width={320}
+                    height={400}
+                    radius={22}
+                    background="#17100c"
+                    color="#fff8f1"
+                    ariaLabel={`${photo.title}. Clique para ver as opções de download.`}
+                    front={
+                      <div className="photo-flip-face photo-flip-face--front">
+                        <small>{photo.court}</small>
+                        <img
+                          src={photo.imageUrl}
+                          loading="lazy"
+                          decoding="async"
+                          alt={photo.altText || `Foto do jogo, ${photo.court}`}
+                        />
+                        <strong>{photo.title}</strong>
+                        <span className="photo-flip-hint">Clique para ver opções</span>
+                      </div>
+                    }
+                    back={
+                      <div className="photo-flip-face photo-flip-face--back">
+                        <span className="mono">FOTO SELECIONADA</span>
+                        <h2>{photo.title}</h2>
+                        <p>Baixe sua foto e poste seu momento nas redes sociais.</p>
+                        <a
+                          className="photo-download photo-download--large"
+                          href={photo.imageUrl}
+                          download
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`Baixar ${photo.title}`}
+                        >
+                          <Download size={22} /> Baixar foto
+                        </a>
+                      </div>
+                    }
                   />
-                  <figcaption>
-                    <span>{photo.title}</span>
-                    <a
-                      className="photo-download"
-                      href={photo.imageUrl}
-                      download
-                      aria-label={`Baixar ${photo.title}`}
-                    >
-                      <Download size={18} />
-                    </a>
-                  </figcaption>
-                </figure>
+                </div>
               ))}
             </div>
             {visible < filtered.length && (
