@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
 import { LazyLoopVideo } from "@/components/LazyLoopVideo";
-import { PhotoConveyorGallery } from "@/components/PhotoConveyorGallery";
+import { PhotoCtaSection } from "@/components/PhotoCtaSection";
 import { TournamentCountdown } from "@/components/TournamentCountdown";
 import { SITE, TOURNAMENT, mapEmbedLink, mapSearchLink, waLink } from "@/lib/site";
 
@@ -313,7 +313,7 @@ function HomePage() {
       </section>
 
       <main id="conteudo">
-        <PhotoConveyorGallery />
+        <PhotoCtaSection />
         <section className="sec" id="unidades">
           <div className="wrap">
             <div className="sh" data-r>

@@ -1,0 +1,76 @@
+.photo-landing-cta {
+  position: relative;
+  min-height: clamp(28rem, 68svh, 44rem);
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+  background: #17100c;
+  color: #fff8f1;
+}
+.photo-landing-cta__photo {
+  position: absolute;
+  inset: -3%;
+  background: url("/images/arena-fotos-menina.png") center 34% / cover no-repeat;
+  filter: blur(7px) saturate(0.8);
+  transform: scale(1.06);
+  opacity: 0.66;
+}
+.photo-landing-cta__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(15 8 4 / 0.94) 0%, rgb(15 8 4 / 0.74) 44%, rgb(15 8 4 / 0.34) 100%),
+    linear-gradient(0deg, rgb(15 8 4 / 0.74), transparent 42%, rgb(15 8 4 / 0.25));
+}
+.photo-landing-cta__content {
+  position: relative;
+  z-index: 1;
+  padding-block: clamp(4rem, 10svh, 8rem);
+}
+.photo-landing-cta__eyebrow {
+  color: #ffad72;
+  font: 700 0.78rem/1.2 var(--font-mono);
+  letter-spacing: 0.12em;
+}
+.photo-landing-cta h2 {
+  max-width: 12ch;
+  margin: 0.7rem 0 1rem;
+  color: #fff8f1;
+  font: 800 clamp(3rem, 9vw, 8rem)/0.84 var(--font-display);
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.photo-landing-cta p {
+  max-width: 34rem;
+  margin: 0;
+  color: rgb(255 248 241 / 0.84);
+  font-size: clamp(1rem, 1rem + 0.5vw, 1.35rem);
+}
+.photo-landing-cta__button {
+  margin-top: 1.7rem;
+  box-shadow: 0 14px 44px rgb(223 79 7 / 0.42);
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 180ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .photo-landing-cta__button:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 20px 54px rgb(223 79 7 / 0.62);
+  }
+}
+@media (max-width: 40rem) {
+  .photo-landing-cta__photo {
+    background-position: 62% center;
+    filter: blur(5px) saturate(0.82);
+    opacity: 0.5;
+  }
+  .photo-landing-cta__veil {
+    background: linear-gradient(180deg, rgb(15 8 4 / 0.6), rgb(15 8 4 / 0.88));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-landing-cta__button {
+    transition: none;
+  }
+}
