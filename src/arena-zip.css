@@ -376,8 +376,25 @@ nav a.l:hover::after {
 }
 /* seções */
 section.sec {
+  position: relative;
+  isolation: isolate;
   padding-block: var(--s4);
-  border-bottom: 1px solid var(--bd);
+  border-bottom: 0;
+}
+section.sec::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  z-index: 0;
+  height: clamp(4rem, 10vw, 9rem);
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, var(--bg) 100%);
+}
+section.sec > * {
+  position: relative;
+  z-index: 1;
 }
 .sh {
   display: grid;

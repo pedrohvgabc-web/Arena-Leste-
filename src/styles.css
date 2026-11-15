@@ -756,18 +756,11 @@
   gap: 0.5rem;
 }
 .photo-grid {
-  column-count: 2;
-  column-gap: 0.7rem;
-}
-@media (min-width: 40rem) {
-  .photo-grid {
-    column-count: 3;
-  }
-}
-@media (min-width: 62rem) {
-  .photo-grid {
-    column-count: 4;
-  }
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: clamp(1.25rem, 3vw, 2.6rem);
+  align-items: start;
+  padding-block: 0.5rem;
 }
 .photo-tile {
   position: relative;

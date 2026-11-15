@@ -152,7 +152,19 @@ function PhotosPage() {
                           className="photo-download photo-download--large"
                           href={photo.imageUrl}
                           download
-                          onClick={(event) => event.stopPropagation()}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onPointerUp={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const link = event.currentTarget;
+                            const downloadLink = document.createElement("a");
+                            downloadLink.href = link.href;
+                            downloadLink.download = "arena-leste-foto.webp";
+                            document.body.appendChild(downloadLink);
+                            downloadLink.click();
+                            downloadLink.remove();
+                          }}
                           aria-label={`Baixar ${photo.title}`}
                         >
                           <Download size={22} /> Baixar foto
