@@ -212,6 +212,19 @@ function TournamentPage() {
           <RegistrationForm />
         </div>
       </section>
+      <section className="sec pt-0" aria-labelledby="photo-cta-heading">
+        <div className="wrap">
+          <div className="photo-cta">
+            <h3 id="photo-cta-heading">
+              Clique no botão para achar sua foto
+              <br />e postar nas redes sociais
+            </h3>
+            <Link className="btn" to="/fotos">
+              Ache aqui sua foto!
+            </Link>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
@@ -333,15 +346,6 @@ function RegistrationForm() {
         >
           <ArrowRight className="h-4 w-4" /> Continuar no WhatsApp
         </a>
-        <div className="photo-cta mt-8">
-          <h3>
-            Clique no botão para achar sua foto
-            <br />e postar nas redes sociais
-          </h3>
-          <Link className="btn" to="/fotos">
-            Ache aqui sua foto!
-          </Link>
-        </div>
       </div>
     );
   }
