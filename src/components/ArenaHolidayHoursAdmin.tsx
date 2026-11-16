@@ -15,8 +15,8 @@ type UnitId = "unidade-1" | "unidade-2";
 type DateOverride = { unitId: UnitId; date: string; label: string; windows: OpeningWindow[] };
 type HolidayItem = { date: string; name: string; scope: ArenaHolidayScope | "Data especial" };
 
-const WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "08:00", end: "23:00" }];
-const WEEKDAY_WINDOWS: OpeningWindow[] = [{ start: "19:00", end: "24:00" }];
+const WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
+const WEEKDAY_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
 
 function dateLabel(date: string) {
   return new Intl.DateTimeFormat("pt-BR", {

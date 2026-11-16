@@ -15,12 +15,14 @@ import {
   toMin,
   validateOpeningWindows,
   hasFirstAndLastName,
+  HOLIDAY_OPENING_WINDOWS,
   type OpeningWindow,
   type PaymentPlan,
 } from "./arena-rules";
 import { normalizeValidCpf } from "./customer-data";
 import { tournamentRegistrationSchema } from "./tournament-schema";
 import { TOURNAMENT } from "./site";
+import { arenaHolidaysForYear } from "./holidays";
 
 type SpaceRow = {
   id: string;
@@ -132,6 +134,12 @@ type ReleasableBookingRow = {
 type BookingPaymentReviewRow = { provider: string; provider_status: string };
 
 const database = async () => (await import("./db.server")).getDb();
+
+function isArenaHoliday(dateISO: string) {
+  return arenaHolidaysForYear(Number(dateISO.slice(0, 4))).some(
+    (holiday) => holiday.date === dateISO,
+  );
+}
 
 export const getPublicPaymentConfig = createServerFn({ method: "GET" }).handler(async () => {
   const { getPaymentMode } = await import("./payments.server");
@@ -358,7 +366,12 @@ export const getPublicBookingDates = createServerFn({ method: "GET" })
       return date.toISOString().slice(0, 10);
     }).filter((date) => {
       const override = overrides.get(date);
-      const windows = override === undefined ? weekly.get(weekdayOf(date)) : override;
+      const windows =
+        override === undefined
+          ? isArenaHoliday(date)
+            ? HOLIDAY_OPENING_WINDOWS
+            : weekly.get(weekdayOf(date))
+          : override;
       return normalizeWindows(windows).length > 0;
     });
   });
@@ -410,7 +423,11 @@ export const getAvailability = createServerFn({ method: "GET" })
         : [],
     );
     const windows = normalizeWindows(
-      first.override_date !== null ? first.override_windows : first.weekly_windows,
+      first.override_date !== null
+        ? first.override_windows
+        : isArenaHoliday(data.date)
+          ? HOLIDAY_OPENING_WINDOWS
+          : first.weekly_windows,
     );
     return slotsFor(data.date, windows, Number(first.slot_minutes)).map((s) => {
       const conflict = occupied.find(
@@ -551,7 +568,11 @@ export const createBooking = createServerFn({ method: "POST" })
         ]);
         const dateOverride = (overrideRows as unknown as HoursRow[])[0];
         const windows = normalizeWindows(
-          dateOverride ? dateOverride.windows : (hoursRows as unknown as HoursRow[])[0]?.windows,
+          dateOverride
+            ? dateOverride.windows
+            : isArenaHoliday(data.date)
+              ? HOLIDAY_OPENING_WINDOWS
+              : (hoursRows as unknown as HoursRow[])[0]?.windows,
         );
         const slots: Array<{ start: string; end: string }> = [];
         for (const start of starts) {
@@ -636,6 +657,8 @@ export const createBooking = createServerFn({ method: "POST" })
           Number(space.price_cents),
           Number(space.slot_minutes),
           slots.length,
+          data.date,
+          data.method,
         );
         const chargeAmount = initialPaymentCents(pricing.totalCents, paymentPlan);
         const paymentShares = splitAmountCents(chargeAmount, slots.length);

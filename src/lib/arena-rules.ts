@@ -4,6 +4,7 @@ export const SLOT_MINUTES = 60;
 
 export type OpeningWindow = { start: string; end: string };
 export type PaymentMethod = "pix" | "card_onsite" | "cash_onsite";
+export const HOLIDAY_OPENING_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
 export type PaymentPlan = "full" | "deposit_30";
 export type PaymentStatus = "pending" | "paid" | "cancelled" | "expired" | "failed";
 export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
@@ -216,7 +217,30 @@ export const totalCents = (priceCents: number, count: number) => priceCents * Ma
 
 export const MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR = 5_000;
 
-export function calculateBookingPrice(priceCents: number, slotMinutes: number, count: number) {
+export const WEEKDAY_PROMO_RATE_CENTS_PER_HOUR = 4_000;
+export const THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR = 4_500;
+
+/** Promoção da Arena: somente acima de 2h, no Pix ou dinheiro. */
+export function promotionalHourlyRateCents(
+  dateISO: string | undefined,
+  method: PaymentMethod | undefined,
+  durationMinutes: number,
+) {
+  if (!dateISO || !method || !["pix", "cash_onsite"].includes(method)) return null;
+  if (durationMinutes <= 2 * 60) return null;
+  const weekday = weekdayOf(dateISO);
+  return weekday >= 0 && weekday <= 3
+    ? WEEKDAY_PROMO_RATE_CENTS_PER_HOUR
+    : THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR;
+}
+
+export function calculateBookingPrice(
+  priceCents: number,
+  slotMinutes: number,
+  count: number,
+  dateISO?: string,
+  method?: PaymentMethod,
+) {
   const quantity = Math.max(0, Math.floor(count));
   const regularPrice = Number.isFinite(priceCents) ? Math.max(0, Math.round(priceCents)) : 0;
   const validDuration = Number.isInteger(slotMinutes) && slotMinutes > 0;
@@ -224,11 +248,16 @@ export function calculateBookingPrice(priceCents: number, slotMinutes: number, c
 
   const regularHourlyRate = (regularPrice * 60) / slotMinutes;
   const totalDurationMinutes = quantity * slotMinutes;
+  const arenaPromoRate = promotionalHourlyRateCents(dateISO, method, totalDurationMinutes);
   const promoApplied =
-    totalDurationMinutes > 60 && regularHourlyRate > MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR;
-  const perSlotCents = promoApplied
-    ? Math.round((MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR * slotMinutes) / 60)
-    : regularPrice;
+    arenaPromoRate !== null ||
+    (dateISO === undefined &&
+      method === undefined &&
+      totalDurationMinutes > 60 &&
+      regularHourlyRate > MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR);
+  const hourlyRate = arenaPromoRate ?? (promoApplied ? MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR : null);
+  const perSlotCents =
+    hourlyRate !== null ? Math.round((hourlyRate * slotMinutes) / 60) : regularPrice;
 
   return { perSlotCents, totalCents: perSlotCents * quantity, promoApplied };
 }

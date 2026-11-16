@@ -36,6 +36,11 @@ type DraftHours = Record<UnitId, Record<number, OpeningWindow[]>>;
 const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
 const DURATION_OPTIONS = [30, 45, 60, 90, 120];
+const DEFAULT_WEEKDAY_WINDOWS: OpeningWindow[] = [
+  { start: "07:00", end: "21:00" },
+  { start: "22:00", end: "23:00" },
+];
+const DEFAULT_WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
 
 function centsFromText(value: string) {
   const normalized = value.trim().replace(",", ".");
@@ -505,9 +510,15 @@ export function ArenaSettingsAdmin({
           <div className="grid gap-3 lg:grid-cols-2">
             {WEEKDAYS.map((day, weekday) => {
               const windows = hoursDraft[selectedUnit][weekday] ?? [];
-              const suggestedWindow = windows.length
-                ? suggestOpeningWindow(windows)
-                : { start: weekday === 0 || weekday === 6 ? "08:00" : "19:00", end: "24:00" };
+              const suggestedWindows = windows.length
+                ? (() => {
+                    const suggestion = suggestOpeningWindow(windows);
+                    return suggestion ? [suggestion] : [];
+                  })()
+                : (weekday === 0 || weekday === 6
+                    ? DEFAULT_WEEKEND_WINDOWS
+                    : DEFAULT_WEEKDAY_WINDOWS
+                  ).map((window) => ({ ...window }));
               const saving = savingDay === `${selectedUnit}:${weekday}`;
               return (
                 <article
@@ -589,16 +600,17 @@ export function ArenaSettingsAdmin({
                         </button>
                       </div>
                     ))}
-                    {windows.length < 2 && suggestedWindow && (
-                      <button
-                        type="button"
-                        onClick={() => updateWindows(weekday, [...windows, suggestedWindow])}
-                        className="inline-flex min-h-10 items-center gap-2 rounded-full border border-dashed border-border px-4 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary"
-                      >
-                        <Plus className="h-4 w-4" /> Adicionar intervalo
-                      </button>
-                    )}
-                    {windows.length === 1 && !suggestedWindow && (
+                    {windows.length + suggestedWindows.length <= 2 &&
+                      suggestedWindows.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => updateWindows(weekday, [...windows, ...suggestedWindows])}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-dashed border-border px-4 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+                        >
+                          <Plus className="h-4 w-4" /> Adicionar intervalo
+                        </button>
+                      )}
+                    {windows.length === 1 && suggestedWindows.length === 0 && (
                       <p className="text-xs text-muted-foreground">
                         Para adicionar outro intervalo, deixe ao menos uma hora livre entre as
                         faixas existentes.

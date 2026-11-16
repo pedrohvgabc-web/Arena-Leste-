@@ -23,9 +23,9 @@ import {
   initialPaymentCents,
   MAX_BOOKING_MINUTES,
   MAX_SLOTS,
-  MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR,
   hasFirstAndLastName,
   normalizeFullName,
+  promotionalHourlyRateCents,
   type PaymentMethod,
   type PaymentPlan,
 } from "@/lib/arena-rules";
@@ -309,6 +309,8 @@ function Reservar() {
         selectedSpace.price_cents,
         selectedSpace.slot_minutes,
         selectedSlots.length,
+        date ?? undefined,
+        paymentMethod,
       )
     : null;
   const selectedDurationMinutes = selectedSlots.length * (selectedSpace?.slot_minutes ?? 60);
@@ -319,13 +321,13 @@ function Reservar() {
   const regularHourlyRateCents = selectedSpace
     ? Math.round((selectedSpace.price_cents * 60) / selectedSpace.slot_minutes)
     : 6_000;
-  const promoAvailable = selectedSpace
-    ? (selectedSpace.price_cents * 60) / selectedSpace.slot_minutes >
-      MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR
-    : regularHourlyRateCents > MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR;
-  const promoHourlyRateCents = promoAvailable
-    ? MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR
-    : regularHourlyRateCents;
+  const promoRate = promotionalHourlyRateCents(
+    date ?? undefined,
+    paymentMethod,
+    selectedDurationMinutes,
+  );
+  const promoAvailable = promoRate !== null;
+  const promoHourlyRateCents = promoRate ?? regularHourlyRateCents;
   const appliedHourlyRateCents = pricing?.promoApplied
     ? MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR
     : regularHourlyRateCents;
@@ -803,6 +805,15 @@ function Reservar() {
                 )}
               </fieldset>
 
+              <a
+                className="mono booking-help booking-hours-help"
+                href={waLink("Olá! Quero alugar uma quadra ou negociar um horário diferenciado.")}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Quero alugar ou negociar horários diferenciados pelo WhatsApp ↗
+              </a>
+
               <fieldset
                 data-booking-step="3"
                 data-active={bookingStep === 3}
@@ -1081,14 +1092,15 @@ function Reservar() {
             if (event.target === event.currentTarget) setCancellationDialogOpen(false);
           }}
         >
-          <span className="mono">REGRA DE CANCELAMENTO</span>
-          <h2 id="booking-cancel-title">Antes de confirmar</h2>
+          <span className="mono">CANCELAMENTO</span>
+          <h2 id="booking-cancel-title">Aviso rápido</h2>
           <div className="booking-cancel-callout" role="note">
             <span className="booking-cancel-callout__badge" aria-hidden="true">
               24h
             </span>
             <p id="booking-cancel-description">
-              Cancele com 24h de antecedência do primeiro horário. Depois, não será permitido.
+              Você pode cancelar até 24h antes do primeiro horário. Depois desse prazo, não é
+              possível cancelar.
             </p>
           </div>
           <div className="booking-payment-dialog__actions">
@@ -1241,11 +1253,11 @@ function Reservar() {
           <span className="mono">ARENA LESTE · VANTAGEM DESBLOQUEADA</span>
           <h2 id="booking-promo-title">{promoAvailable ? "PROMOÇÃO LIBERADA" : "MENOR TARIFA"}</h2>
           <p id="booking-promo-description">
-            {!selectedSpace
-              ? "Mais de 1h? R$50/h nas quadras elegíveis. Reserve e economize."
+            {!date || selectedDurationMinutes <= 120
+              ? "Alugue acima de 2 horas no Pix ou dinheiro e aproveite: R$ 40/h de domingo a quarta ou R$ 45/h de quinta a sábado."
               : promoAvailable
-                ? `Mais de 1h: ${formatBRL(promoHourlyRateCents)}/h. Reserve agora e economize.`
-                : `Esta quadra já custa ${formatBRL(regularHourlyRateCents)}/h. Você já paga menos.`}
+                ? `Sua promoção está ativa: ${formatBRL(promoHourlyRateCents)}/h no ${paymentMethod === "pix" ? "Pix" : "dinheiro"}.`
+                : "Para ativar a promoção, escolha Pix ou dinheiro e selecione mais de 2 horas."}
           </p>
           <button
             type="button"

@@ -2596,3 +2596,95 @@ tr:last-child td {
     animation: none;
   }
 }
+
+/* Promoção da landing: chamada forte, mas acessível e sem autoplay de conteúdo. */
+.landing-promo-cta {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 0.3rem;
+  width: min(100%, 25rem);
+  margin-top: 1.1rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 173 114 / 0.7);
+  border-radius: 1.2rem;
+  background: linear-gradient(115deg, rgb(223 79 7 / 0.95), rgb(255 154 61 / 0.85));
+  padding: 1rem 1.2rem;
+  color: #fff;
+  text-align: left;
+  box-shadow:
+    0 0 0 0 rgb(255 122 51 / 0.45),
+    0 1rem 2.5rem rgb(223 79 7 / 0.28);
+  cursor: pointer;
+  animation: landing-promo-pulse 2.5s ease-in-out infinite;
+}
+.landing-promo-cta__beam {
+  position: absolute;
+  z-index: -1;
+  top: -30%;
+  bottom: -30%;
+  left: -35%;
+  width: 20%;
+  background: rgb(255 248 241 / 0.68);
+  filter: blur(0.8rem);
+  transform: skewX(-18deg);
+  animation: landing-promo-beam 3.2s ease-in-out infinite;
+}
+.landing-promo-cta .mono {
+  color: rgb(255 248 241 / 0.78);
+  font-size: 0.7rem;
+}
+.landing-promo-cta strong {
+  font: italic 900 clamp(1.45rem, 4vw, 2.1rem) / 0.95 var(--fh);
+  text-transform: uppercase;
+}
+.landing-promo-cta b {
+  font-size: 0.85rem;
+}
+.landing-promo-cta:hover,
+.landing-promo-cta:focus-visible {
+  animation-play-state: paused;
+  outline: 3px solid #fff;
+  outline-offset: 0.25rem;
+  transform: translateY(-2px);
+}
+.landing-promo-dialog {
+  text-align: center;
+}
+.landing-promo-dialog p strong {
+  color: var(--ac);
+}
+@keyframes landing-promo-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgb(255 122 51 / 0.36),
+      0 1rem 2.5rem rgb(223 79 7 / 0.28);
+  }
+  50% {
+    box-shadow:
+      0 0 0 0.55rem rgb(255 122 51 / 0.08),
+      0 1.3rem 3rem rgb(223 79 7 / 0.42);
+  }
+}
+@keyframes landing-promo-beam {
+  0%,
+  18% {
+    left: -35%;
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.9;
+  }
+  68%,
+  100% {
+    left: 125%;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-promo-cta,
+  .landing-promo-cta__beam {
+    animation: none;
+  }
+}

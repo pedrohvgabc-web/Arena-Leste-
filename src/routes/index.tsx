@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
 import { LazyLoopVideo } from "@/components/LazyLoopVideo";
 import { PhotoCtaSection } from "@/components/PhotoCtaSection";
+import { PromotionCta } from "@/components/PromotionCta";
 import { TournamentCountdown } from "@/components/TournamentCountdown";
 import { SITE, TOURNAMENT, mapEmbedLink, mapSearchLink, waLink } from "@/lib/site";
 
@@ -245,6 +246,7 @@ function HomePage() {
               Ver unidades
             </a>
           </div>
+          <PromotionCta />
           <div className="cue mono">
             <b />
             Role para explorar

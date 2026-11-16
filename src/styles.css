@@ -1251,3 +1251,35 @@
     transition: none;
   }
 }
+
+/* Galeria mobile: dois cartões grandes e uma fração do próximo, em vez de três miniaturas. */
+.photo-grid {
+  grid-auto-columns: minmax(10.5rem, calc((100% - 1rem) / 2.15));
+  gap: 0.85rem;
+  padding-inline: 0.35rem;
+  scroll-padding-inline: 0.35rem;
+}
+.photo-flip-card {
+  --fc-h: clamp(18rem, 62vw, 26rem) !important;
+}
+.photo-flip-face--front::after {
+  background: linear-gradient(180deg, rgb(18 15 23 / 0.02) 42%, rgb(18 15 23 / 0.78) 100%);
+}
+.photo-flip-face--front small {
+  margin: 0.6rem;
+  padding: 0.24rem 0.55rem;
+  font-size: 0.68rem;
+}
+.photo-flip-face--front strong {
+  padding-inline: 0.85rem;
+  font-size: clamp(0.95rem, 3vw, 1.35rem);
+}
+.photo-flip-hint {
+  padding: 0.45rem 0.85rem 0.85rem;
+  font-size: 0.7rem;
+}
+@media (min-width: 48rem) {
+  .photo-grid {
+    grid-auto-columns: calc((100% - 2.25rem) / 4);
+  }
+}
