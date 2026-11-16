@@ -16,6 +16,7 @@ import {
   isWithinBookingHorizon,
   hasFirstAndLastName,
   normalizeFullName,
+  promotionalHourlyRateCents,
   type OpeningWindow,
 } from "./arena-rules";
 
@@ -132,32 +133,38 @@ describe("regras de funcionamento configuráveis", () => {
   });
 });
 
-describe("preço promocional de reservas múltiplas", () => {
-  it("mantém o preço normal com um horário e aplica R$50/h com dois", () => {
+describe("preço normal e promoção de reservas", () => {
+  it("mantém a tarifa normal configurada sem data e método promocional", () => {
     expect(calculateBookingPrice(6_000, 60, 1)).toEqual({
       perSlotCents: 6_000,
       totalCents: 6_000,
       promoApplied: false,
     });
     expect(calculateBookingPrice(6_000, 60, 2)).toEqual({
-      perSlotCents: 5_000,
-      totalCents: 10_000,
-      promoApplied: true,
+      perSlotCents: 6_000,
+      totalCents: 12_000,
+      promoApplied: false,
     });
   });
-
-  it("calcula o valor por hora proporcional à duração do horário", () => {
+  it("aplica R$40/h de domingo a quarta acima de duas horas no Pix", () => {
+    expect(promotionalHourlyRateCents("2026-11-15", "pix", 180)).toBe(4_000);
     expect(calculateBookingPrice(9_000, 90, 2)).toEqual({
-      perSlotCents: 7_500,
-      totalCents: 15_000,
-      promoApplied: true,
+      perSlotCents: 9_000,
+      totalCents: 18_000,
+      promoApplied: false,
     });
   });
-
-  it("aplica a promoção quando a taxa é um pouco acima de R$50/h mesmo arredondada na UI", () => {
+  it("aplica R$45/h de quinta a sábado no dinheiro e não no cartão", () => {
+    expect(promotionalHourlyRateCents("2026-11-19", "cash_onsite", 180)).toBe(4_500);
+    expect(promotionalHourlyRateCents("2026-11-19", "card_onsite", 180)).toBeNull();
     expect(calculateBookingPrice(15_001, 180, 1)).toEqual({
-      perSlotCents: 15_000,
-      totalCents: 15_000,
+      perSlotCents: 15_001,
+      totalCents: 15_001,
+      promoApplied: false,
+    });
+    expect(calculateBookingPrice(5_000, 60, 3, "2026-11-15", "pix")).toEqual({
+      perSlotCents: 4_000,
+      totalCents: 12_000,
       promoApplied: true,
     });
   });
@@ -170,16 +177,16 @@ describe("preço promocional de reservas múltiplas", () => {
     });
   });
 
-  it("aplica R$50/h depois de passar uma hora, mesmo em um único slot de 90 min", () => {
+  it("mantém a tarifa normal quando não há promoção elegível", () => {
     expect(calculateBookingPrice(9_000, 90, 1)).toEqual({
-      perSlotCents: 7_500,
-      totalCents: 7_500,
-      promoApplied: true,
+      perSlotCents: 9_000,
+      totalCents: 9_000,
+      promoApplied: false,
     });
     expect(calculateBookingPrice(3_000, 30, 3)).toEqual({
-      perSlotCents: 2_500,
-      totalCents: 7_500,
-      promoApplied: true,
+      perSlotCents: 3_000,
+      totalCents: 9_000,
+      promoApplied: false,
     });
   });
 
@@ -190,13 +197,13 @@ describe("preço promocional de reservas múltiplas", () => {
       promoApplied: false,
     });
   });
-  it("totaliza quatro horas em R$200 e permite a jornada de 16 horas", () => {
+  it("totaliza a tarifa normal e permite a jornada de 16 horas", () => {
     expect(calculateBookingPrice(6_000, 60, 4)).toEqual({
-      perSlotCents: 5_000,
-      totalCents: 20_000,
-      promoApplied: true,
+      perSlotCents: 6_000,
+      totalCents: 24_000,
+      promoApplied: false,
     });
-    expect(calculateBookingPrice(6_000, 60, 16).totalCents).toBe(80_000);
+    expect(calculateBookingPrice(6_000, 60, 16).totalCents).toBe(96_000);
   });
   it("calcula 30% em centavos e distribui o total sem perder centavos", () => {
     expect(initialPaymentCents(20_000, "deposit_30")).toBe(6_000);

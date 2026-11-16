@@ -320,7 +320,7 @@ function Reservar() {
   );
   const regularHourlyRateCents = selectedSpace
     ? Math.round((selectedSpace.price_cents * 60) / selectedSpace.slot_minutes)
-    : 6_000;
+    : 5_000;
   const promoRate = promotionalHourlyRateCents(
     date ?? undefined,
     paymentMethod,
@@ -329,7 +329,7 @@ function Reservar() {
   const promoAvailable = promoRate !== null;
   const promoHourlyRateCents = promoRate ?? regularHourlyRateCents;
   const appliedHourlyRateCents = pricing?.promoApplied
-    ? MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR
+    ? promoHourlyRateCents
     : regularHourlyRateCents;
   const totalCents = pricing?.totalCents ?? 0;
   const chargeCents = initialPaymentCents(totalCents, paymentPlan);
@@ -807,11 +807,11 @@ function Reservar() {
 
               <a
                 className="mono booking-help booking-hours-help"
-                href={waLink("Olá! Quero alugar uma quadra ou negociar um horário diferenciado.")}
+                href={waLink("Olá! Quero negociar horários diferenciados.")}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Quero alugar ou negociar horários diferenciados pelo WhatsApp ↗
+                Quero negociar horários diferenciados pelo WhatsApp ↗
               </a>
 
               <fieldset
@@ -1345,7 +1345,9 @@ function BookingConfirmation({
         </div>
       )}
       {booking.promoApplied && (
-        <p className="booking-promo-applied">Promoção aplicada: R$ 50 por hora.</p>
+        <p className="booking-promo-applied">
+          Promoção aplicada: tarifa especial conforme o dia e a forma de pagamento.
+        </p>
       )}
       {booking.method === "pix" && booking.pixSimulated && booking.pixPayload && (
         <div className="pix-note">

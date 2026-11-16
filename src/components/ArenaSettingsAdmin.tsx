@@ -37,7 +37,7 @@ const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
 const DURATION_OPTIONS = [30, 45, 60, 90, 120];
 const DEFAULT_WEEKDAY_WINDOWS: OpeningWindow[] = [
-  { start: "07:00", end: "21:00" },
+  { start: "19:00", end: "21:00" },
   { start: "22:00", end: "23:00" },
 ];
 const DEFAULT_WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];

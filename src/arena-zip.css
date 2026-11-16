@@ -2688,3 +2688,9 @@ tr:last-child td {
     animation: none;
   }
 }
+
+@media (hover: none), (pointer: coarse) {
+  .fol {
+    display: none !important;
+  }
+}

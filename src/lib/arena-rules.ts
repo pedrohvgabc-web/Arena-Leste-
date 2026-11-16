@@ -215,8 +215,6 @@ export const MAX_BOOKING_MINUTES = 16 * 60;
 export const MAX_SLOTS = MAX_BOOKING_MINUTES / 30;
 export const totalCents = (priceCents: number, count: number) => priceCents * Math.max(0, count);
 
-export const MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR = 5_000;
-
 export const WEEKDAY_PROMO_RATE_CENTS_PER_HOUR = 4_000;
 export const THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR = 4_500;
 
@@ -249,13 +247,8 @@ export function calculateBookingPrice(
   const regularHourlyRate = (regularPrice * 60) / slotMinutes;
   const totalDurationMinutes = quantity * slotMinutes;
   const arenaPromoRate = promotionalHourlyRateCents(dateISO, method, totalDurationMinutes);
-  const promoApplied =
-    arenaPromoRate !== null ||
-    (dateISO === undefined &&
-      method === undefined &&
-      totalDurationMinutes > 60 &&
-      regularHourlyRate > MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR);
-  const hourlyRate = arenaPromoRate ?? (promoApplied ? MULTI_SLOT_PROMO_RATE_CENTS_PER_HOUR : null);
+  const promoApplied = arenaPromoRate !== null;
+  const hourlyRate = arenaPromoRate;
   const perSlotCents =
     hourlyRate !== null ? Math.round((hourlyRate * slotMinutes) / 60) : regularPrice;
 

@@ -821,6 +821,8 @@ async function getPublicBooking(code: string) {
     Number(first.space_price_cents ?? 0),
     Number(first.slot_minutes),
     rows.length,
+    String(first.booking_date),
+    first.payment_method as "pix" | "card_onsite" | "cash_onsite",
   );
   const paymentPlan: PaymentPlan = balanceDue > 0 ? "deposit_30" : "full";
   return {
