@@ -111,6 +111,12 @@ function formatSlot(slot: { start: string; end: string }) {
   return `${slot.start.slice(0, 5)} – ${end === "24:00" ? "00:00" : end}`;
 }
 
+function slotDurationMinutes(slot: { start: string; end: string }) {
+  const [startHour, startMinute] = slot.start.split(":").map(Number);
+  const [endHour, endMinute] = slot.end.split(":").map(Number);
+  return endHour * 60 + endMinute - (startHour * 60 + startMinute);
+}
+
 export const Route = createFileRoute("/reservar")({
   loaderDeps: ({ search }) => ({ offerId: search.offer }),
   loader: async ({ deps }) => {
@@ -288,6 +294,10 @@ function Reservar() {
   const selectedSlots = slots.filter(
     (slot) => starts.includes(slot.start) && slot.status === "available",
   );
+  const selectedDurationMinutes = selectedSlots.reduce(
+    (total, slot) => total + slotDurationMinutes(slot),
+    0,
+  );
   useEffect(() => {
     if (availabilityQuery.isLoading || availabilityQuery.isFetching) return;
     const available = new Set(
@@ -311,9 +321,9 @@ function Reservar() {
         selectedSlots.length,
         date ?? undefined,
         paymentMethod,
+        selectedDurationMinutes,
       )
     : null;
-  const selectedDurationMinutes = selectedSlots.length * (selectedSpace?.slot_minutes ?? 60);
   const maxSelectableSlots = Math.min(
     MAX_SLOTS,
     Math.floor(MAX_BOOKING_MINUTES / (selectedSpace?.slot_minutes ?? 60)),
@@ -371,13 +381,20 @@ function Reservar() {
   function chooseTime(nextStart: string) {
     if (starts.includes(nextStart)) {
       setStarts((current) => current.filter((value) => value !== nextStart));
-    } else if (
-      starts.length >= maxSelectableSlots ||
-      (starts.length + 1) * (selectedSpace?.slot_minutes ?? 60) > MAX_BOOKING_MINUTES
-    ) {
-      setError("Você pode reservar até 16 horas por pedido.");
-      return;
     } else {
+      const nextSlot = slots.find((slot) => slot.start === nextStart);
+      const currentDuration = starts.reduce((total, start) => {
+        const slot = slots.find((item) => item.start === start);
+        return total + (slot ? slotDurationMinutes(slot) : 0);
+      }, 0);
+      if (
+        !nextSlot ||
+        starts.length >= maxSelectableSlots ||
+        currentDuration + slotDurationMinutes(nextSlot) > MAX_BOOKING_MINUTES
+      ) {
+        setError("Você pode reservar até 16 horas por pedido.");
+        return;
+      }
       setStarts((current) =>
         current.includes(nextStart) ? current : [...current, nextStart].sort(),
       );
@@ -786,7 +803,7 @@ function Reservar() {
                           aria-pressed={starts.includes(slot.start) && available}
                           onClick={() => chooseTime(slot.start)}
                         >
-                          {slot.start}
+                          {formatSlot(slot)}
                           <small>
                             {!available
                               ? "indisponível"

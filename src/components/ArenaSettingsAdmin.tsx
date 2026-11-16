@@ -37,7 +37,7 @@ const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
 const DURATION_OPTIONS = [30, 45, 60, 90, 120];
 const DEFAULT_WEEKDAY_WINDOWS: OpeningWindow[] = [
-  { start: "19:00", end: "21:00" },
+  { start: "19:00", end: "21:00", slotMinutes: 120 },
   { start: "22:00", end: "23:00" },
 ];
 const DEFAULT_WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
@@ -279,6 +279,8 @@ export function ArenaSettingsAdmin({
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
               Para a quadra aparecer na reserva, configure o preço, marque “Ativa para reserva” e
               clique em “Salvar e liberar na reserva”. Quadras inativas ou sem preço ficam ocultas.
+              A grade padrão de segunda a sexta é 19:00–21:00 e 22:00–23:00; sábado, domingo e
+              feriados usam 15:00–24:00.
             </p>
           </div>
           <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-bold text-primary">

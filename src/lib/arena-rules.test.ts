@@ -111,6 +111,17 @@ describe("regras de funcionamento configuráveis", () => {
     expect(slots[0]).toEqual({ start: "17:00", end: "18:00" });
     expect(slots.at(-1)).toEqual({ start: "22:00", end: "23:00" });
   });
+  it("mantém o bloco de 19h–21h unido e o bloco de 22h–23h separado", () => {
+    expect(
+      slotsFor("2026-10-23", [
+        { start: "19:00", end: "21:00", slotMinutes: 120 },
+        { start: "22:00", end: "23:00" },
+      ]),
+    ).toEqual([
+      { start: "19:00", end: "21:00" },
+      { start: "22:00", end: "23:00" },
+    ]);
+  });
   it("não inclui horário fora da grade configurada", () => {
     expect(validateSlot("2026-10-24", "16:00", SATURDAY, 60, NOW).ok).toBe(false);
   });

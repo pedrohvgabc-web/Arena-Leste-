@@ -2,7 +2,7 @@
 export const ARENA_TZ = "America/Porto_Velho";
 export const SLOT_MINUTES = 60;
 
-export type OpeningWindow = { start: string; end: string };
+export type OpeningWindow = { start: string; end: string; slotMinutes?: number };
 export type PaymentMethod = "pix" | "card_onsite" | "cash_onsite";
 export const HOLIDAY_OPENING_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
 export type PaymentPlan = "full" | "deposit_30";
@@ -46,6 +46,15 @@ export function validateOpeningWindows(windows: OpeningWindow[]) {
     }
     if (toMin(window.end) <= toMin(window.start)) {
       return "O fechamento deve ser depois da abertura.";
+    }
+    if (
+      window.slotMinutes !== undefined &&
+      (!Number.isInteger(window.slotMinutes) ||
+        window.slotMinutes < 15 ||
+        window.slotMinutes > 240 ||
+        window.slotMinutes > toMin(window.end) - toMin(window.start))
+    ) {
+      return "A duração do bloco deve caber dentro do intervalo configurado.";
     }
     const previous = ordered[index - 1];
     if (previous && toMin(window.start) < toMin(previous.end)) {
@@ -146,8 +155,10 @@ export function slotsFor(
     const open = toMin(window.start);
     const close = toMin(window.end);
     if (close <= open) continue;
-    for (let start = open; start + slotMinutes <= close; start += slotMinutes) {
-      out.push({ start: toHHMM(start), end: toHHMM(start + slotMinutes) });
+    const interval = window.slotMinutes ?? slotMinutes;
+    if (!Number.isInteger(interval) || interval < 15 || interval > 240) continue;
+    for (let start = open; start + interval <= close; start += interval) {
+      out.push({ start: toHHMM(start), end: toHHMM(start + interval) });
     }
   }
   return [...new Map(out.map((slot) => [slot.start, slot])).values()].sort((a, b) =>
@@ -238,21 +249,22 @@ export function calculateBookingPrice(
   count: number,
   dateISO?: string,
   method?: PaymentMethod,
+  durationMinutesOverride?: number,
 ) {
   const quantity = Math.max(0, Math.floor(count));
   const regularPrice = Number.isFinite(priceCents) ? Math.max(0, Math.round(priceCents)) : 0;
   const validDuration = Number.isInteger(slotMinutes) && slotMinutes > 0;
   if (!quantity || !validDuration) return { perSlotCents: 0, totalCents: 0, promoApplied: false };
 
-  const regularHourlyRate = (regularPrice * 60) / slotMinutes;
-  const totalDurationMinutes = quantity * slotMinutes;
+  const totalDurationMinutes = durationMinutesOverride ?? quantity * slotMinutes;
   const arenaPromoRate = promotionalHourlyRateCents(dateISO, method, totalDurationMinutes);
   const promoApplied = arenaPromoRate !== null;
-  const hourlyRate = arenaPromoRate;
-  const perSlotCents =
-    hourlyRate !== null ? Math.round((hourlyRate * slotMinutes) / 60) : regularPrice;
+  const totalCents =
+    arenaPromoRate !== null
+      ? Math.round((arenaPromoRate * totalDurationMinutes) / 60)
+      : Math.round((regularPrice * totalDurationMinutes) / slotMinutes);
 
-  return { perSlotCents, totalCents: perSlotCents * quantity, promoApplied };
+  return { perSlotCents: Math.round(totalCents / quantity), totalCents, promoApplied };
 }
 
 export function formatDuration(minutes: number) {

@@ -141,6 +141,10 @@ function isArenaHoliday(dateISO: string) {
   );
 }
 
+function durationMinutesOfSlots(slots: Array<{ start: string; end: string }>) {
+  return slots.reduce((total, slot) => total + toMin(slot.end) - toMin(slot.start), 0);
+}
+
 export const getPublicPaymentConfig = createServerFn({ method: "GET" }).handler(async () => {
   const { getPaymentMode } = await import("./payments.server");
   return { mode: getPaymentMode() };
@@ -175,8 +179,9 @@ function normalizeWindows(value: unknown): OpeningWindow[] {
     const row = item as Record<string, unknown>;
     const start = typeof row["start"] === "string" ? row["start"] : "";
     const end = typeof row["end"] === "string" ? row["end"] : "";
+    const slotMinutes = typeof row["slotMinutes"] === "number" ? row["slotMinutes"] : undefined;
     return /^\d{2}:\d{2}$/.test(start) && /^\d{2}:\d{2}$/.test(end) && toMin(end) > toMin(start)
-      ? [{ start, end }]
+      ? [{ start, end, ...(slotMinutes === undefined ? {} : { slotMinutes }) }]
       : [];
   });
 }
@@ -580,7 +585,8 @@ export const createBooking = createServerFn({ method: "POST" })
           if (!valid.ok) return { code: null, error: valid.reason };
           slots.push({ start, end: valid.end });
         }
-        if (slots.length * Number(space.slot_minutes) > MAX_BOOKING_MINUTES) {
+        const totalDurationMinutes = durationMinutesOfSlots(slots);
+        if (totalDurationMinutes > MAX_BOOKING_MINUTES) {
           return { code: null, error: "Você pode reservar até 16 horas por pedido." };
         }
 
@@ -659,6 +665,7 @@ export const createBooking = createServerFn({ method: "POST" })
           slots.length,
           data.date,
           data.method,
+          totalDurationMinutes,
         );
         const chargeAmount = initialPaymentCents(pricing.totalCents, paymentPlan);
         const paymentShares = splitAmountCents(chargeAmount, slots.length);
@@ -817,12 +824,17 @@ async function getPublicBooking(code: string) {
   const amount = rows.reduce((sum, row) => sum + Number(row.amount_cents), 0);
   const chargeAmount = rows.reduce((sum, row) => sum + Number(row.payment_amount_cents ?? 0), 0);
   const balanceDue = Math.max(0, amount - chargeAmount);
+  const bookingSlots = rows.map((row) => ({
+    start: String(row.start_time),
+    end: String(row.end_time),
+  }));
   const expectedPrice = calculateBookingPrice(
     Number(first.space_price_cents ?? 0),
     Number(first.slot_minutes),
     rows.length,
     String(first.booking_date),
     first.payment_method as "pix" | "card_onsite" | "cash_onsite",
+    durationMinutesOfSlots(bookingSlots),
   );
   const paymentPlan: PaymentPlan = balanceDue > 0 ? "deposit_30" : "full";
   return {
@@ -832,7 +844,7 @@ async function getPublicBooking(code: string) {
       date: String(first.booking_date),
       start: String(first.start_time),
       end: String(last.end_time),
-      slots: rows.map((row) => ({ start: String(row.start_time), end: String(row.end_time) })),
+      slots: bookingSlots,
       method: first.payment_method,
       status: first.payment_status,
       amount,
@@ -1360,6 +1372,7 @@ const weeklyHoursSchema = z
         z.object({
           start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
           end: z.string().regex(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/),
+          slotMinutes: z.number().int().min(15).max(240).optional(),
         }),
       )
       .max(2),
