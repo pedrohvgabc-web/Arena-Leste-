@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, Hand, ImageOff, Loader2, Search } from "lucide-react";
+import { Download, Expand, Hand, ImageOff, Loader2, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Grainient from "@/components/Grainient.jsx";
 import FlipCard from "@/components/FlipCard.jsx";
@@ -23,6 +23,7 @@ function PhotosPage() {
   const [court, setCourt] = useState("all");
   const [visible, setVisible] = useState(40);
   const [loading, setLoading] = useState(true);
+  const [expandedPhoto, setExpandedPhoto] = useState<PhotoGalleryPhoto | null>(null);
   useEffect(() => {
     let active = true;
     void fetchPhotos().then((result) => {
@@ -35,6 +36,19 @@ function PhotosPage() {
       active = false;
     };
   }, [fetchPhotos]);
+  useEffect(() => {
+    if (!expandedPhoto) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpandedPhoto(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [expandedPhoto]);
   const courts = useMemo(
     () => Array.from(new Set(photos.map((photo) => photo.court))).sort(),
     [photos],
@@ -65,7 +79,7 @@ function PhotosPage() {
       <div className="photos-page__content wrap sec">
         <header className="photo-gallery-heading">
           <div className="photo-gallery-brand">
-            <img src="/arena-leste-logo.png" alt="Arena Leste" />
+            <img src="/images/arena-leste-zip-logo.png" alt="Arena Leste" />
             <span className="mono">Memórias da areia</span>
           </div>
           <span className="photo-gallery-kicker">Galeria oficial</span>
@@ -184,6 +198,19 @@ function PhotosPage() {
                         >
                           <Download size={22} /> Baixar foto
                         </a>
+                        <button
+                          className="photo-expand-button"
+                          type="button"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onPointerUp={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setExpandedPhoto(photo);
+                          }}
+                          aria-label={`Expandir ${photo.title}`}
+                        >
+                          <Expand size={18} /> Expandir foto
+                        </button>
                       </div>
                     }
                   />
@@ -202,6 +229,31 @@ function PhotosPage() {
           </>
         )}
       </div>
+      {expandedPhoto && (
+        <div
+          className="photo-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Foto ampliada: ${expandedPhoto.title}`}
+          onClick={() => setExpandedPhoto(null)}
+        >
+          <div className="photo-lightbox__panel" onClick={(event) => event.stopPropagation()}>
+            <button
+              className="photo-lightbox__close"
+              type="button"
+              onClick={() => setExpandedPhoto(null)}
+              aria-label="Fechar foto ampliada"
+            >
+              <X size={24} />
+            </button>
+            <img src={expandedPhoto.imageUrl} alt={expandedPhoto.altText || expandedPhoto.title} />
+            <div className="photo-lightbox__caption">
+              <strong>{expandedPhoto.title}</strong>
+              <span>{expandedPhoto.court}</span>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

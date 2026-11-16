@@ -1130,3 +1130,124 @@
     animation: none;
   }
 }
+
+/* Expanded photo viewer */
+.photo-flip-face--back {
+  align-items: stretch;
+}
+.photo-download--large,
+.photo-expand-button {
+  justify-content: center;
+}
+.photo-expand-button {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgb(255 248 241 / 0.28);
+  border-radius: 999px;
+  background: rgb(255 248 241 / 0.08);
+  padding: 0.45rem 0.65rem;
+  color: #fff8f1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+.photo-expand-button:hover {
+  border-color: #ffad72;
+  background: rgb(255 122 51 / 0.22);
+  transform: translateY(-1px);
+}
+.photo-flip-card {
+  --fc-h: clamp(15rem, 42vw, 21rem) !important;
+}
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgb(5 5 6 / 0.88);
+  padding: clamp(1rem, 4vw, 3rem);
+  backdrop-filter: blur(18px);
+  animation: photo-lightbox-in 180ms ease-out;
+}
+.photo-lightbox__panel {
+  position: relative;
+  display: grid;
+  max-width: min(94vw, 72rem);
+  max-height: 92svh;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgb(255 173 114 / 0.3);
+  border-radius: clamp(1rem, 3vw, 2rem);
+  background: #120f17;
+  box-shadow: 0 2rem 6rem rgb(0 0 0 / 0.55);
+}
+.photo-lightbox__panel img {
+  display: block;
+  max-width: 100%;
+  max-height: 80svh;
+  object-fit: contain;
+}
+.photo-lightbox__close {
+  position: absolute;
+  z-index: 2;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid rgb(255 248 241 / 0.35);
+  border-radius: 50%;
+  background: rgb(18 15 23 / 0.78);
+  color: #fff8f1;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
+}
+.photo-lightbox__close:hover {
+  background: #df4f07;
+  transform: rotate(90deg);
+}
+.photo-lightbox__caption {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: linear-gradient(180deg, rgb(18 15 23 / 0.2), #120f17);
+  padding: 0.85rem 1rem 1rem;
+  color: #fff8f1;
+}
+.photo-lightbox__caption strong {
+  font: 700 clamp(0.95rem, 2vw, 1.3rem)/1 var(--font-display);
+  text-transform: uppercase;
+}
+.photo-lightbox__caption span {
+  color: #ffad72;
+  font: 700 0.72rem var(--font-mono);
+  text-transform: uppercase;
+}
+@keyframes photo-lightbox-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .photo-lightbox {
+    animation: none;
+  }
+  .photo-expand-button,
+  .photo-lightbox__close {
+    transition: none;
+  }
+}
