@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, ImageOff, Loader2, Search } from "lucide-react";
+import { Download, Hand, ImageOff, Loader2, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Grainient from "@/components/Grainient.jsx";
 import FlipCard from "@/components/FlipCard.jsx";
@@ -63,14 +63,25 @@ function PhotosPage() {
         clickSwirl
       />
       <div className="photos-page__content wrap sec">
-        <span className="mono">Galeria</span>
-        <h1 className="mt-2 font-display text-5xl font-extrabold uppercase sm:text-7xl">
-          Fotos do evento
-        </h1>
-        <p className="mt-3 max-w-xl text-muted-foreground">
-          Encontre sua foto do Novembro Azul, filtre pela quadra e baixe a imagem para postar nas
-          redes.
-        </p>
+        <header className="photo-gallery-heading">
+          <div className="photo-gallery-brand">
+            <img src="/arena-leste-logo.png" alt="Arena Leste" />
+            <span className="mono">Memórias da areia</span>
+          </div>
+          <span className="photo-gallery-kicker">Galeria oficial</span>
+          <h1 className="mt-2 font-display text-5xl font-extrabold uppercase sm:text-7xl">
+            Encontre sua foto
+          </h1>
+          <p className="mt-3 max-w-xl text-muted-foreground">
+            Deslize para explorar os momentos do Novembro Azul. Achou a sua? Clique na foto para
+            virar o cartão e baixar.
+          </p>
+          <div className="photo-gallery-instruction" role="note">
+            <Hand size={22} aria-hidden="true" />
+            <span>Clique em cima da foto para ver e baixar</span>
+            <span className="photo-gallery-drag-note">Arraste para o lado para ver mais</span>
+          </div>
+        </header>
         <div className="photo-tools mt-8" role="search">
           <label className="relative block min-w-0 flex-1">
             <span className="sr-only">Buscar</span>
@@ -119,7 +130,11 @@ function PhotosPage() {
           </div>
         ) : (
           <>
-            <div className="photo-grid mt-8" aria-live="polite">
+            <div
+              className="photo-grid mt-8"
+              aria-label="Galeria de fotos. Deslize horizontalmente para ver mais."
+              aria-live="polite"
+            >
               {shown.map((photo) => (
                 <div className="photo-flip-wrap" key={photo.id}>
                   <FlipCard
