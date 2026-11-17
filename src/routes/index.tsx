@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
 import { LazyLoopVideo } from "@/components/LazyLoopVideo";
+import { GravaiSection } from "@/components/GravaiSection";
 import { PhotoCtaSection } from "@/components/PhotoCtaSection";
 import { PromotionCta } from "@/components/PromotionCta";
 import { TournamentCountdown } from "@/components/TournamentCountdown";
@@ -238,6 +239,9 @@ function HomePage() {
           <p className="lead">
             Esporte de areia, time reunido e boas histórias. A gente se encontra na Arena Leste.
           </p>
+          <a className="gravai-hero-link" href="#gravaai">
+            Venha rever suas jogadas e postar nas redes sociais ↘
+          </a>
           <div className="cta">
             <Link className="btn pri lg" to="/reservar" search={{ unit: "unidade-1" }}>
               Escolher meu horário
@@ -316,6 +320,7 @@ function HomePage() {
 
       <main id="conteudo">
         <PhotoCtaSection />
+        <GravaiSection />
         <section className="sec" id="unidades">
           <div className="wrap">
             <div className="sh" data-r>
