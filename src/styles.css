@@ -1339,3 +1339,9 @@
     --fc-h: clamp(16rem, 68vw, 22rem) !important;
   }
 }
+
+
+/* WMS / PDV */
+.input { width: 100%; border-radius: 0.75rem; border: 1px solid rgb(255 255 255 / 0.1); background: rgb(0 0 0 / 0.2); padding: 0.75rem 0.875rem; color: #fff8f1; outline: none; }
+.input:focus { border-color: var(--primary); }
+.input option { background: #211a23; color: #fff8f1; }
