@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Download, Expand, Hand, ImageOff, Loader2, Search, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Grainient from "@/components/Grainient.jsx";
 import FlipCard from "@/components/FlipCard.jsx";
 import { getPublicGalleryPhotos, type PhotoGalleryPhoto } from "@/lib/gallery.functions";
@@ -24,6 +24,7 @@ function PhotosPage() {
   const [visible, setVisible] = useState(40);
   const [loading, setLoading] = useState(true);
   const [expandedPhoto, setExpandedPhoto] = useState<PhotoGalleryPhoto | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let active = true;
     void fetchPhotos().then((result) => {
@@ -64,6 +65,20 @@ function PhotosPage() {
     });
   }, [court, photos, query]);
   const shown = filtered.slice(0, visible);
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || visible >= filtered.length) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible((value) => Math.min(value + 40, filtered.length));
+        }
+      },
+      { rootMargin: "500px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [filtered.length, visible]);
   return (
     <main className="photos-page" id="conteudo">
       <Grainient
@@ -87,13 +102,13 @@ function PhotosPage() {
             Encontre sua foto
           </h1>
           <p className="mt-3 max-w-xl text-muted-foreground">
-            Deslize para explorar os momentos do Novembro Azul. Achou a sua? Clique na foto para
-            virar o cartão e baixar.
+            Role para baixo para explorar os momentos do Novembro Azul. Achou a sua? Clique na foto
+            para virar o cartão e baixar.
           </p>
           <div className="photo-gallery-instruction" role="note">
             <Hand size={22} aria-hidden="true" />
             <span>Clique em cima da foto para ver e baixar</span>
-            <span className="photo-gallery-drag-note">Arraste para o lado para ver mais</span>
+            <span className="photo-gallery-drag-note">Role para baixo para ver mais fotos</span>
           </div>
         </header>
         <div className="photo-tools mt-8" role="search">
@@ -146,7 +161,7 @@ function PhotosPage() {
           <>
             <div
               className="photo-grid mt-8"
-              aria-label="Galeria de fotos. Deslize horizontalmente para ver mais."
+              aria-label="Galeria de fotos. Role verticalmente para ver mais."
               aria-live="polite"
             >
               {shown.map((photo) => (
@@ -217,15 +232,11 @@ function PhotosPage() {
                 </div>
               ))}
             </div>
-            {visible < filtered.length && (
-              <button
-                className="btn pri mx-auto mt-8 flex"
-                type="button"
-                onClick={() => setVisible((value) => value + 40)}
-              >
-                Carregar mais fotos
-              </button>
-            )}
+            <div ref={loadMoreRef} className="photo-gallery-load-sentinel" aria-hidden="true">
+              {visible < filtered.length
+                ? "Carregando mais fotos…"
+                : "Você chegou ao fim da galeria."}
+            </div>
           </>
         )}
       </div>

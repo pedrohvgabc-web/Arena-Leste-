@@ -126,8 +126,9 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const hasZipLayout = ["/", "/reservar", "/torneio", "/admin"].includes(pathname);
-  const showReleasedSlotsNotice = pathname !== "/admin" && !pathname.startsWith("/api/");
+  const hasZipLayout = ["/", "/reservar", "/torneio", "/admin", "/fotos"].includes(pathname);
+  const showReleasedSlotsNotice =
+    pathname !== "/admin" && pathname !== "/fotos" && !pathname.startsWith("/api/");
   return (
     <QueryClientProvider client={queryClient}>
       <a href="#conteudo" className="skip">
