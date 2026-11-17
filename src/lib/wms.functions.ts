@@ -89,8 +89,17 @@ export const wmsLogin = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = getDb();
     const adminPassword = process.env["ADMIN_PASSWORD"];
+    const rawUsername = data.username.toLowerCase().trim();
+    const normalizedUsername = rawUsername.replace(/[._-]+/g, " ").trim();
+    const isAdminUsername =
+      normalizedUsername === "admin" ||
+      normalizedUsername === "admin master" ||
+      normalizedUsername === "master" ||
+      normalizedUsername === "admin remoto" ||
+      normalizedUsername === "admin@arena leste.com br" ||
+      rawUsername === "admin@arena-leste.com.br";
     if (
-      data.username.toLowerCase() === "admin" &&
+      isAdminUsername &&
       adminPassword &&
       (await sha256(data.password)) === (await sha256(adminPassword))
     ) {
