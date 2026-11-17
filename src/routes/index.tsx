@@ -239,17 +239,21 @@ function HomePage() {
           <p className="lead">
             Esporte de areia, time reunido e boas histórias. A gente se encontra na Arena Leste.
           </p>
-          <a className="gravai-hero-link" href="#gravae">
-            Reveja suas jogadas e compartilhe ↘
-          </a>
           <div className="cta">
-            <Link className="btn pri lg" to="/reservar" search={{ unit: "unidade-1" }}>
+            <Link
+              className="btn pri lg hero-booking-cta"
+              to="/reservar"
+              search={{ unit: "unidade-1" }}
+            >
               Escolher meu horário
             </Link>
             <a className="btn lg" href="#unidades">
               Ver unidades
             </a>
           </div>
+          <a className="gravai-hero-link hero-secondary-cta" href="#gravae">
+            Reveja suas jogadas e compartilhe ↘
+          </a>
           <PromotionCta />
           <div className="cue mono">
             <b />

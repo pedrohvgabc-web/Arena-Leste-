@@ -3129,3 +3129,49 @@ tr:last-child td {
     animation: none;
   }
 }
+
+/* Hierarquia explícita do hero: reservar é a ação principal; Gravae vem depois. */
+.hero-booking-cta {
+  min-width: 15rem;
+  border: 2px solid rgb(255 220 191 / 0.9) !important;
+  box-shadow:
+    0 0 0 0.35rem rgb(255 106 31 / 0.18),
+    0 0.9rem 2.4rem rgb(115 25 3 / 0.52) !important;
+  animation: hero-booking-cta-pulse 1.35s ease-in-out infinite !important;
+}
+.hero-secondary-cta {
+  display: inline-flex;
+  margin-top: 2.8rem !important;
+  opacity: 0.82;
+}
+.hero-secondary-cta:hover {
+  opacity: 1;
+}
+@keyframes hero-booking-cta-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 0 0.35rem rgb(255 106 31 / 0.18),
+      0 0.9rem 2.4rem rgb(115 25 3 / 0.52);
+  }
+  50% {
+    transform: scale(1.045);
+    box-shadow:
+      0 0 0 0.7rem rgb(255 106 31 / 0.03),
+      0 1.1rem 2.8rem rgb(115 25 3 / 0.7);
+  }
+}
+@media (max-width: 42rem) {
+  .hero-booking-cta {
+    min-width: 14rem;
+  }
+  .hero-secondary-cta {
+    margin-top: 3rem !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-booking-cta {
+    animation: none !important;
+  }
+}
