@@ -770,66 +770,68 @@ function Reservar() {
                 )}
               </fieldset>
 
-              <fieldset
-                data-booking-step="2"
-                data-active={bookingStep === 2}
-                tabIndex={-1}
-                className={!date ? "lk" : ""}
-                disabled={!date || Boolean(releasedOfferId)}
-              >
-                <legend className="mono">
-                  Horários · até {maxSelectableSlots} blocos (16h máx.)
-                </legend>
-                {availabilityQuery.isLoading ? (
-                  <p className="hint">
-                    <LoaderCircle size={16} className="loading-icon" /> Consultando horários…
-                  </p>
-                ) : availabilityQuery.isError ? (
-                  <p className="hint" role="alert">
-                    Não foi possível consultar este horário.
-                  </p>
-                ) : !date ? (
-                  <p className="hint">Escolha um dia aberto acima para carregar os horários.</p>
-                ) : slots.length ? (
-                  <div className="opts">
-                    {slots.map((slot) => {
-                      const available = slot.status === "available";
-                      return (
-                        <button
-                          key={slot.start}
-                          type="button"
-                          className="opt"
-                          disabled={!available || Boolean(releasedOfferId)}
-                          aria-pressed={starts.includes(slot.start) && available}
-                          onClick={() => chooseTime(slot.start)}
-                        >
-                          {formatSlot(slot)}
-                          <small>
-                            {!available
-                              ? "indisponível"
-                              : starts.includes(slot.start)
-                                ? "selecionado"
-                                : "livre · selecionar"}
-                          </small>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="hint">
-                    Sem horários disponíveis para esta data. Escolha outro dia.
-                  </p>
-                )}
-              </fieldset>
+              <div className="booking-hours-row">
+                <fieldset
+                  data-booking-step="2"
+                  data-active={bookingStep === 2}
+                  tabIndex={-1}
+                  className={!date ? "lk" : ""}
+                  disabled={!date || Boolean(releasedOfferId)}
+                >
+                  <legend className="mono">
+                    Horários · até {maxSelectableSlots} blocos (16h máx.)
+                  </legend>
+                  {availabilityQuery.isLoading ? (
+                    <p className="hint">
+                      <LoaderCircle size={16} className="loading-icon" /> Consultando horários…
+                    </p>
+                  ) : availabilityQuery.isError ? (
+                    <p className="hint" role="alert">
+                      Não foi possível consultar este horário.
+                    </p>
+                  ) : !date ? (
+                    <p className="hint">Escolha um dia aberto acima para carregar os horários.</p>
+                  ) : slots.length ? (
+                    <div className="opts">
+                      {slots.map((slot) => {
+                        const available = slot.status === "available";
+                        return (
+                          <button
+                            key={slot.start}
+                            type="button"
+                            className="opt"
+                            disabled={!available || Boolean(releasedOfferId)}
+                            aria-pressed={starts.includes(slot.start) && available}
+                            onClick={() => chooseTime(slot.start)}
+                          >
+                            {formatSlot(slot)}
+                            <small>
+                              {!available
+                                ? "indisponível"
+                                : starts.includes(slot.start)
+                                  ? "selecionado"
+                                  : "livre · selecionar"}
+                            </small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="hint">
+                      Sem horários disponíveis para esta data. Escolha outro dia.
+                    </p>
+                  )}
+                </fieldset>
 
-              <a
-                className="mono booking-help booking-hours-help"
-                href={waLink("Olá! Quero negociar horários diferenciados.")}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Quero negociar horários diferenciados pelo WhatsApp ↗
-              </a>
+                <a
+                  className="mono booking-help booking-hours-help"
+                  href={waLink("Olá! Quero negociar horários diferenciados.")}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Quero negociar horários diferenciados ↗
+                </a>
+              </div>
 
               <fieldset
                 data-booking-step="3"
