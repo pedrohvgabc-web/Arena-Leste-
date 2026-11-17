@@ -70,7 +70,6 @@ type BookingResult = {
 type BookingDraft = { name: string; phone: string; cpf: string; address: string; notes: string };
 
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
-const PROMO_DISMISSED_KEY = "arena-leste-promo-dismissed-v2";
 const METHODS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "pix", label: "Pix demonstrativo · sem cobrança real" },
   { value: "card_onsite", label: "Cartão no local" },
@@ -184,7 +183,6 @@ function Reservar() {
   const paymentDialogRef = useRef<HTMLDialogElement>(null);
   const [promoDialogOpen, setPromoDialogOpen] = useState(false);
   const [promoReady, setPromoReady] = useState(false);
-  const [promoDismissed, setPromoDismissed] = useState(false);
   const promoDialogRef = useRef<HTMLDialogElement>(null);
   const promoTriggerRef = useRef<HTMLButtonElement>(null);
   const promoReturnFocusRef = useRef<HTMLHeadingElement>(null);
@@ -196,11 +194,6 @@ function Reservar() {
   );
 
   useEffect(() => {
-    try {
-      setPromoDismissed(window.localStorage.getItem(PROMO_DISMISSED_KEY) === "1");
-    } catch {
-      setPromoDismissed(false);
-    }
     setPromoReady(true);
   }, []);
 
@@ -440,12 +433,6 @@ function Reservar() {
 
   function dismissPromo() {
     setPromoDialogOpen(false);
-    setPromoDismissed(true);
-    try {
-      window.localStorage.setItem(PROMO_DISMISSED_KEY, "1");
-    } catch {
-      // The CTA still disappears for this mounted page if storage is unavailable.
-    }
     requestAnimationFrame(() => promoReturnFocusRef.current?.focus({ preventScroll: true }));
   }
 
@@ -614,7 +601,7 @@ function Reservar() {
           </div>
         ) : null}
 
-        {!booking && promoReady && !promoDismissed && (
+        {!booking && promoReady && (
           <button
             ref={promoTriggerRef}
             type="button"

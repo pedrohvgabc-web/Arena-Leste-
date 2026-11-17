@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { adminCurrentBookings, adminCurrentDay, adminUpdateBooking } from "@/lib/arena.functions";
-import { SITE } from "@/lib/site";
 import {
   arenaNow,
   formatBRL,
@@ -179,6 +178,13 @@ function formatBookingDate(iso: string) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" })
     .format(new Date(`${iso}T12:00:00Z`))
     .replace(" de ", " ");
+}
+
+function formatBookingWeekday(iso: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    timeZone: "UTC",
+  }).format(new Date(`${iso}T12:00:00Z`));
 }
 
 export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "reservations" }) {
@@ -457,7 +463,6 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
             ) : (
               <ul className="space-y-3">
                 {filteredGroups.map((booking) => {
-                  const unit = SITE.units.find((item) => item.id === booking.unitId);
                   const paymentProgress = paymentProgressPercentages(
                     booking.amountCents,
                     booking.receivedAmountCents,
@@ -469,7 +474,8 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
                         booking.balanceDueCents > 0
                       ? `Falta pagar ${paymentProgress.remainingPercentage}%`
                       : STATUS_LABEL[booking.status];
-                  const message = `Olá, ${booking.name.split(" ")[0]}! Sobre sua reserva ${booking.code} na ${unit?.name ?? "Arena Leste"}, ${booking.date.split("-").reverse().join("/")} às ${formatSlotRanges(booking.slots)}.`;
+                  const unitNumber = booking.unitId === "unidade-1" ? "1" : "2";
+                  const message = `Olá, ${booking.name.split(" ")[0]}, sobre a sua reserva na Arena Leste ${unitNumber}, ${formatBookingWeekday(booking.date)}, dia ${booking.date.split("-").reverse().join("/")}, das ${formatSlotRanges(booking.slots)}.`;
                   return (
                     <li
                       key={booking.code}
