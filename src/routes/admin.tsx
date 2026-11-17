@@ -153,6 +153,17 @@ const shift = (iso: string, d: number) => {
   return x.toISOString().slice(0, 10);
 };
 
+function formatAdminWeekday(iso: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    timeZone: "UTC",
+  }).format(new Date(`${iso}T12:00:00Z`));
+}
+
+function formatAdminTimeRange(range: string) {
+  return range.replace("24:00", "00:00");
+}
+
 function Dashboard() {
   const qc = useQueryClient();
   const [date, setDate] = useState(() => arenaNow().date);
@@ -186,13 +197,14 @@ function Dashboard() {
 
   const all = useMemo(() => day.data?.bookings ?? [], [day.data?.bookings]);
   const groups = useMemo(() => {
-    const m = new Map<string, { total: number; times: string[] }>();
+    const m = new Map<string, { total: number; times: string[]; ranges: string[] }>();
     for (const b of all) {
       if (b.payment_status === "cancelled") continue;
       const g = b.group_code ?? b.booking_code;
-      const e = m.get(g) ?? { total: 0, times: [] };
+      const e = m.get(g) ?? { total: 0, times: [], ranges: [] };
       e.total += b.amount_cents;
       e.times.push(b.start_time.slice(0, 5));
+      e.ranges.push(`${b.start_time.slice(0, 5)} – ${b.end_time.slice(0, 5)}`);
       m.set(g, e);
     }
     for (const e of m.values()) e.times.sort();
@@ -540,7 +552,7 @@ function Dashboard() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="grid h-10 w-10 place-items-center rounded-lg border border-border hover:bg-accent"
-                              href={`https://wa.me/55${b.phone}?text=${encodeURIComponent(`Olá, ${b.customer_name.split(" ")[0]}! Este contato é sobre o registro antigo ${code}, ${spaceName(b.space_id)}, ${b.booking_date.split("-").reverse().join("/")} às ${(g?.times ?? [b.start_time.slice(0, 5)]).join(", ")}. Confirme com a equipe da Arena Leste se este registro ainda se aplica antes de considerar o horário confirmado.`)}`}
+                              href={`https://wa.me/55${b.phone}?text=${encodeURIComponent(`Olá, ${b.customer_name.split(" ")[0]}, sobre a sua reserva na Arena Leste, ${formatAdminWeekday(b.booking_date)}, dia ${b.booking_date.split("-").reverse().join("/")}, das ${(g?.ranges ?? [`${b.start_time.slice(0, 5)} – ${b.end_time.slice(0, 5)}`]).map(formatAdminTimeRange).join(" e ")}.`)}`}
                             >
                               <MessageCircle className="h-4 w-4" />
                             </a>
