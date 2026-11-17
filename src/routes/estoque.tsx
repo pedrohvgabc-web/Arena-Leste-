@@ -53,7 +53,6 @@ const money = (cents: number) =>
 const roleLabel = (r: Actor["role"]) => (r === "admin_remote" ? "Admin remoto" : "Caixa local");
 
 export const Route = createFileRoute("/estoque")({
-  ssr: false,
   head: () => ({
     meta: [
       { title: `Estoque & PDV — ${SITE.name}` },
