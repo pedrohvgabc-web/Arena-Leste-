@@ -20,19 +20,26 @@ const steps = [
     number: "03",
     icon: Share2,
     title: "Eternize o momento",
-    text: "Faça login no app Grava Aí, é só baixar e compartilhar. Não esqueça de marcar o @gravaai.io.",
+    text: "Faça login no app Gravae, é só baixar e compartilhar. Não esqueça de marcar o @gravaai.io.",
   },
 ];
 
 export function GravaiSection() {
   return (
-    <section className="gravai-section" id="gravaai" aria-labelledby="gravaai-title">
+    <section className="gravai-section" id="gravae" aria-labelledby="gravae-title">
       <div className="gravai-glow" aria-hidden="true" />
       <div className="wrap">
         <div className="gravai-header" data-r>
           <div>
-            <span className="mono gravai-kicker">Arena Leste · Grava Aí</span>
-            <h2 id="gravaai-title">
+            <img
+              className="gravae-logo"
+              src="/images/arena-leste-zip-logo.png"
+              alt="Arena Leste Multi Sports"
+              width="159"
+              height="119"
+            />
+            <span className="mono gravai-kicker">Arena Leste · Gravae</span>
+            <h2 id="gravae-title">
               Reveja sua jogada.
               <br />
               <b>Compartilhe o momento.</b>
@@ -45,16 +52,14 @@ export function GravaiSection() {
         </div>
 
         <div className="gravai-stores" data-r>
-          <span className="gravai-stores__label">
-            Baixe o Grava Aí e leve seus momentos com você
-          </span>
+          <span className="gravai-stores__label">Baixe o Gravae e leve seus momentos com você</span>
           <div className="gravai-stores__links">
             <a
               className="gravai-store"
               href={APP_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Baixar o Grava Aí na App Store"
+              aria-label="Baixar o Gravae na App Store"
             >
               <Apple size={25} aria-hidden="true" />
               <span>
@@ -68,7 +73,7 @@ export function GravaiSection() {
               href={PLAY_STORE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Baixar o Grava Aí no Google Play"
+              aria-label="Baixar o Gravae no Google Play"
             >
               <Play size={25} fill="currentColor" aria-hidden="true" />
               <span>

@@ -3042,3 +3042,42 @@ tr:last-child td {
     min-width: min(100%, 15rem);
   }
 }
+
+/* Ajustes finais da seção Gravae e da chamada no topo. */
+.gravai-hero-link {
+  align-items: center;
+  min-height: 3.25rem;
+  margin-top: 1.35rem;
+  padding: 0.8rem 1.15rem;
+  border: 1px solid rgb(255 138 73 / 0.58);
+  border-radius: 999px;
+  background: linear-gradient(100deg, #c93608, #ff6a1f);
+  box-shadow: 0 0.7rem 2rem rgb(184 45 4 / 0.28);
+  color: #fff;
+  font-size: clamp(0.82rem, 1.5vw, 1rem);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.gravai-hero-link:hover {
+  background: linear-gradient(100deg, #ef4c12, #ff853f);
+  color: #fff;
+  transform: translateY(-0.15rem);
+}
+.gravai-section {
+  background:
+    radial-gradient(circle at 8% 18%, rgb(224 48 13 / 0.3), transparent 30rem),
+    radial-gradient(circle at 90% 78%, rgb(255 86 18 / 0.25), transparent 28rem),
+    linear-gradient(180deg, #210a06 0%, #4a1208 48%, #110604 100%);
+}
+.gravae-logo {
+  display: block;
+  width: clamp(7rem, 14vw, 10rem);
+  height: auto;
+  margin: 0 0 0.6rem;
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 0 1.2rem rgb(255 85 22 / 0.3));
+}
+.gravai-kicker {
+  color: #ffad7a;
+}
