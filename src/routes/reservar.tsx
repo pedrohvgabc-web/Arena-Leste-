@@ -624,7 +624,9 @@ function Reservar() {
             aria-label="Aperte para liberar sua PROMOÇÃO"
             onClick={() => setPromoDialogOpen(true)}
           >
-            <span>Aperte para liberar sua PROMOÇÃO</span>
+            <strong>LIBERE SUA</strong>
+            <span>PROMOÇÃO</span>
+            <small>TOQUE AQUI</small>
           </button>
         )}
 
@@ -1118,8 +1120,7 @@ function Reservar() {
               24h
             </span>
             <p id="booking-cancel-description">
-              Você pode cancelar até 24h antes do primeiro horário. Depois desse prazo, não é
-              possível cancelar.
+              Depois do prazo de 24 horas, não é possível mais cancelar a sua reserva
             </p>
           </div>
           <div className="booking-payment-dialog__actions">
@@ -1271,13 +1272,20 @@ function Reservar() {
           </span>
           <span className="mono">ARENA LESTE · VANTAGEM DESBLOQUEADA</span>
           <h2 id="booking-promo-title">{promoAvailable ? "PROMOÇÃO LIBERADA" : "MENOR TARIFA"}</h2>
-          <p id="booking-promo-description">
-            {!date || selectedDurationMinutes <= 120
-              ? "Alugue acima de 2 horas no Pix ou dinheiro e aproveite: R$ 40/h de domingo a quarta ou R$ 45/h de quinta a sábado."
-              : promoAvailable
-                ? `Sua promoção está ativa: ${formatBRL(promoHourlyRateCents)}/h no ${paymentMethod === "pix" ? "Pix" : "dinheiro"}.`
-                : "Para ativar a promoção, escolha Pix ou dinheiro e selecione mais de 2 horas."}
+          <p id="booking-promo-description" className="booking-promo-dialog__lead">
+            {promoAvailable
+              ? `ATIVA: ${formatBRL(promoHourlyRateCents)}/h no ${paymentMethod === "pix" ? "Pix" : "dinheiro"}.`
+              : "Alugue mais de 2 horas no Pix ou dinheiro para ativar."}
           </p>
+          <ul className="booking-promo-dialog__rules">
+            <li>
+              <b>Dom–Qua:</b> R$40/h
+            </li>
+            <li>
+              <b>Qui–Sáb:</b> R$45/h
+            </li>
+            <li>Mais de 2 horas · Pix ou dinheiro</li>
+          </ul>
           <button
             type="button"
             className="btn pri lg booking-promo-dialog__ok"
