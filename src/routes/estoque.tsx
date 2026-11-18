@@ -368,9 +368,11 @@ function Dashboard({ actor }: { actor: Actor }) {
     queryKey: ["wms-dashboard"],
     queryFn: () => useServerFn(wmsDashboard)(),
     refetchInterval: 30000,
+    refetchOnMount: "always",
   });
   const d = q.data as any;
-  if (!d) return <Loading />;
+  if (q.isLoading) return <Loading />;
+  if (q.error || !d) return <DataError onRetry={() => void q.refetch()} />;
   const cards = [
     ["Produtos ativos", d.products, Boxes],
     ["Abaixo do mínimo", d.lowStock, PackagePlus],
@@ -431,6 +433,7 @@ function Counter() {
   const productsQ = useQuery({
     queryKey: ["wms-products"],
     queryFn: () => useServerFn(wmsProducts)(),
+    refetchOnMount: "always",
   });
   const sale = useServerFn(wmsCreateSale);
   const qc = useQueryClient();
@@ -458,6 +461,7 @@ function Counter() {
       toast.success(`Venda ${money(r.totalCents)} registrada.`);
       setCart({});
       await qc.invalidateQueries({ queryKey: ["wms-products"] });
+      await qc.refetchQueries({ queryKey: ["wms-products"], type: "active" });
       await qc.invalidateQueries({ queryKey: ["wms-dashboard"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível concluir.");
@@ -571,7 +575,11 @@ function Counter() {
   );
 }
 function Catalog({ actor }: { actor: Actor }) {
-  const q = useQuery({ queryKey: ["wms-products"], queryFn: () => useServerFn(wmsProducts)() });
+  const q = useQuery({
+    queryKey: ["wms-products"],
+    queryFn: () => useServerFn(wmsProducts)(),
+    refetchOnMount: "always",
+  });
   const save = useServerFn(wmsSaveProduct);
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
@@ -586,17 +594,18 @@ function Catalog({ actor }: { actor: Actor }) {
           barcode: data.barcode ?? null,
           category: data.category ?? "Sem categoria",
           unit: data.unit ?? "un",
-          salePriceCents: data.sale_price_cents ?? 0,
-          costPriceCents: data.cost_price_cents ?? 0,
-          stockQuantity: data.stock_quantity ?? 0,
-          minimumStock: data.minimum_stock ?? 0,
-          reorderPoint: data.reorder_point ?? 0,
+          salePriceCents: Number(data.sale_price_cents) || 0,
+          costPriceCents: Number(data.cost_price_cents) || 0,
+          stockQuantity: Number(data.stock_quantity) || 0,
+          minimumStock: Number(data.minimum_stock) || 0,
+          reorderPoint: Number(data.reorder_point) || 0,
           isRental: data.is_rental ?? false,
         },
       });
       toast.success("Produto salvo.");
       setEditing(null);
       await qc.invalidateQueries({ queryKey: ["wms-products"] });
+      await qc.refetchQueries({ queryKey: ["wms-products"], type: "active" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar.");
     }
@@ -742,7 +751,7 @@ function ProductForm({
   onClose: () => void;
   onSave: (v: Partial<Product>) => Promise<void>;
 }) {
-  const [v, setV] = useState(value);
+  const [v, setV] = useState<any>(value);
   const [salePrice, setSalePrice] = useState(formatReaisInput(value.sale_price_cents));
   const [costPrice, setCostPrice] = useState(formatReaisInput(value.cost_price_cents));
   const f = (key: keyof Product, label: string, type = "text", placeholder?: string) => (
@@ -753,7 +762,15 @@ function ProductForm({
         placeholder={placeholder}
         value={(v[key] as string | number | undefined) ?? ""}
         onChange={(e) =>
-          setV({ ...v, [key]: type === "number" ? Number(e.target.value) : e.target.value })
+          setV({
+            ...v,
+            [key]:
+              type === "number"
+                ? e.target.value === ""
+                  ? ""
+                  : Number(e.target.value)
+                : e.target.value,
+          })
         }
         className="input mt-1"
       />
@@ -931,6 +948,8 @@ function Audit() {
       />
       {q.isLoading ? (
         <Loading />
+      ) : q.error ? (
+        <DataError onRetry={() => void q.refetch()} />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#211a23]">
           <table className="w-full text-left text-sm">
@@ -1074,5 +1093,22 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function Loading() {
   return (
     <div className="grid min-h-48 place-items-center text-sm text-white/45">Carregando dados…</div>
+  );
+}
+function DataError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="rounded-2xl border border-red-300/30 bg-red-950/20 p-6 text-sm text-red-100">
+      <p className="font-bold">Não consegui carregar esta área.</p>
+      <p className="mt-1 text-red-100/70">
+        A sessão pode ter expirado ou o servidor pode estar ocupado. Tente novamente.
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 rounded-lg bg-primary px-4 py-2 font-bold text-primary-foreground"
+      >
+        Tentar novamente
+      </button>
+    </div>
   );
 }
