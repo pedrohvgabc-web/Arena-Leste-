@@ -6,8 +6,11 @@ import { toast } from "sonner";
 import {
   Barcode,
   Boxes,
+  CheckCircle2,
   ChartNoAxesCombined,
   ClipboardList,
+  CircleHelp,
+  ArrowRight,
   LogIn,
   LogOut,
   PackagePlus,
@@ -16,6 +19,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Trash2,
+  X,
   UserPlus,
   WalletCards,
 } from "lucide-react";
@@ -51,6 +55,13 @@ type Product = {
 const money = (cents: number) =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const roleLabel = (r: Actor["role"]) => (r === "admin_remote" ? "Admin remoto" : "Caixa local");
+const parseReais = (value: string) => {
+  const normalized = value.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const number = Number(normalized);
+  return Number.isFinite(number) && number >= 0 ? Math.round(number * 100) : 0;
+};
+const formatReaisInput = (cents?: number) =>
+  cents == null ? "" : (cents / 100).toFixed(2).replace(".", ",");
 
 export const Route = createFileRoute("/estoque")({
   head: () => ({
@@ -160,6 +171,12 @@ function WmsShell({ actor }: { actor: Actor }) {
   const logout = useServerFn(wmsLogout);
   const qc = useQueryClient();
   const [tab, setTab] = useState(actor.role === "caixa_local" ? "balcao" : "dashboard");
+  const [guideOpen, setGuideOpen] = useState(
+    () =>
+      actor.role === "admin_remote" &&
+      typeof window !== "undefined" &&
+      localStorage.getItem("arena-wms-guide-seen") !== "1",
+  );
   const tabs =
     actor.role === "admin_remote"
       ? [
@@ -217,6 +234,42 @@ function WmsShell({ actor }: { actor: Actor }) {
         </nav>
       </header>
       <main className="mx-auto max-w-[1500px] px-4 py-7 lg:px-8">
+        {actor.role === "admin_remote" && (
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <CircleHelp className="h-5 w-5 shrink-0 text-primary" />
+              <p className="text-sm">
+                <strong>Primeiro acesso?</strong> Siga o passo a passo para colocar a lojinha para
+                funcionar.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded-lg border border-primary/40 px-3 py-2 text-xs font-bold text-primary"
+              onClick={() => setGuideOpen(true)}
+            >
+              Abrir guia
+            </button>
+          </div>
+        )}
+        {guideOpen && (
+          <FirstAccessGuide
+            onClose={() => {
+              setGuideOpen(false);
+              localStorage.setItem("arena-wms-guide-seen", "1");
+            }}
+            onCatalog={() => {
+              setTab("catalogo");
+              setGuideOpen(false);
+              localStorage.setItem("arena-wms-guide-seen", "1");
+            }}
+            onInventory={() => {
+              setTab("estoque");
+              setGuideOpen(false);
+              localStorage.setItem("arena-wms-guide-seen", "1");
+            }}
+          />
+        )}
         {tab === "dashboard" && <Dashboard actor={actor} />}
         {tab === "balcao" && <Counter />}
         {tab === "catalogo" && <Catalog actor={actor} />}
@@ -227,6 +280,89 @@ function WmsShell({ actor }: { actor: Actor }) {
     </div>
   );
 }
+function FirstAccessGuide({
+  onClose,
+  onCatalog,
+  onInventory,
+}: {
+  onClose: () => void;
+  onCatalog: () => void;
+  onInventory: () => void;
+}) {
+  const steps = [
+    {
+      n: "01",
+      title: "Cadastre o produto",
+      copy: "Nome, preço de venda e quantidade inicial. O SKU é gerado para você.",
+      action: "Cadastrar agora",
+      fn: onCatalog,
+    },
+    {
+      n: "02",
+      title: "Registre a entrada",
+      copy: "Quando chegar mercadoria nova, informe quantas unidades entraram.",
+      action: "Ver entradas",
+      fn: onInventory,
+    },
+    {
+      n: "03",
+      title: "Faça uma venda",
+      copy: "Abra Balcão / PDV, escolha o produto e finalize por Pix, cartão ou dinheiro.",
+      action: "Fechar guia",
+      fn: onClose,
+    },
+  ];
+  return (
+    <section
+      className="mb-8 rounded-[1.5rem] border border-primary/35 bg-[radial-gradient(circle_at_90%_0%,rgba(223,79,7,.28),transparent_42%),#211a23] p-5 shadow-2xl sm:p-7"
+      aria-labelledby="wms-guide-title"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-xs font-bold uppercase tracking-[.16em] text-primary">
+            guia rápido · 3 passos
+          </p>
+          <h2
+            id="wms-guide-title"
+            className="mt-2 font-display text-3xl font-extrabold uppercase sm:text-4xl"
+          >
+            Comece pela sua primeira mercadoria
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/65">
+            Você não precisa entender de logística. Cadastre o produto, informe quantas unidades
+            chegaram e depois use o Balcão para registrar as vendas.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="rounded-lg p-2 text-white/60 hover:bg-white/10 hover:text-white"
+          onClick={onClose}
+          aria-label="Fechar guia"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="mt-6 grid gap-3 md:grid-cols-3">
+        {steps.map((step) => (
+          <article key={step.n} className="rounded-xl border border-white/10 bg-black/15 p-4">
+            <span className="font-mono text-xs text-primary">{step.n}</span>
+            <h3 className="mt-3 font-display text-xl font-bold uppercase">{step.title}</h3>
+            <p className="mt-1 min-h-12 text-sm text-white/55">{step.copy}</p>
+            <button
+              type="button"
+              onClick={step.fn}
+              className="mt-4 inline-flex min-h-11 items-center gap-2 text-sm font-bold text-primary hover:underline"
+            >
+              {step.action}
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Dashboard({ actor }: { actor: Actor }) {
   const q = useQuery({
     queryKey: ["wms-dashboard"],
@@ -501,51 +637,99 @@ function Catalog({ actor }: { actor: Actor }) {
       {editing && (
         <ProductForm value={editing} onClose={() => setEditing(null)} onSave={saveProduct} />
       )}
-      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#211a23]">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-white/40">
-            <tr>
-              <th className="p-4">Produto</th>
-              <th className="p-4">SKU</th>
-              <th className="p-4">Estoque</th>
-              <th className="p-4">Venda</th>
-              {actor.role === "admin_remote" && (
-                <>
-                  <th className="p-4">Custo</th>
-                  <th className="p-4">Margem</th>
-                </>
-              )}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/10">
-            {products.map((p) => (
-              <tr key={p.id}>
-                <td className="p-4">
-                  <p className="font-semibold">{p.name}</p>
-                  <p className="text-xs text-white/40">{p.category}</p>
-                </td>
-                <td className="p-4 font-mono text-xs text-white/55">{p.sku}</td>
-                <td
-                  className={`p-4 font-mono ${p.stock_quantity <= p.minimum_stock ? "text-amber-300" : "text-emerald-300"}`}
-                >
-                  {p.stock_quantity} {p.unit}
-                </td>
-                <td className="p-4 font-mono">{money(p.sale_price_cents)}</td>
+      {q.isLoading && <Loading />}
+      {q.error && (
+        <div className="rounded-2xl border border-red-300/30 bg-red-950/20 p-5 text-sm text-red-100">
+          Não foi possível carregar os produtos. Atualize a página e tente novamente.
+        </div>
+      )}
+      {!q.isLoading && !q.error && products.length === 0 && (
+        <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-8 text-center">
+          <CheckCircle2 className="mx-auto h-8 w-8 text-primary" />
+          <h3 className="mt-3 font-display text-2xl font-bold uppercase">Ainda não há produtos</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
+            Cadastre sua primeira bebida, comida ou material esportivo. É rápido e o código interno
+            será gerado automaticamente.
+          </p>
+          {actor.role === "admin_remote" && (
+            <button
+              type="button"
+              onClick={() =>
+                setEditing({
+                  category: "Bebidas",
+                  unit: "un",
+                  sale_price_cents: 0,
+                  cost_price_cents: 0,
+                  stock_quantity: 0,
+                  minimum_stock: 0,
+                  reorder_point: 0,
+                  is_rental: false,
+                })
+              }
+              className="mt-4 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-primary-foreground"
+            >
+              Cadastrar primeiro produto
+            </button>
+          )}
+        </div>
+      )}
+      {products.length > 0 && (
+        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#211a23]">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-white/40">
+              <tr>
+                <th className="p-4">Produto</th>
+                <th className="p-4">SKU</th>
+                <th className="p-4">Estoque</th>
+                <th className="p-4">Venda</th>
                 {actor.role === "admin_remote" && (
                   <>
-                    <td className="p-4 font-mono">{money(p.cost_price_cents ?? 0)}</td>
-                    <td className="p-4 font-mono text-primary">
-                      {p.sale_price_cents
-                        ? `${Math.round(((p.sale_price_cents - (p.cost_price_cents ?? 0)) / p.sale_price_cents) * 100)}%`
-                        : "—"}
-                    </td>
+                    <th className="p-4">Custo</th>
+                    <th className="p-4">Margem</th>
+                    <th className="p-4">Ação</th>
                   </>
                 )}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {products.map((p) => (
+                <tr key={p.id}>
+                  <td className="p-4">
+                    <p className="font-semibold">{p.name}</p>
+                    <p className="text-xs text-white/40">{p.category}</p>
+                  </td>
+                  <td className="p-4 font-mono text-xs text-white/55">{p.sku}</td>
+                  <td
+                    className={`p-4 font-mono ${p.stock_quantity <= p.minimum_stock ? "text-amber-300" : "text-emerald-300"}`}
+                  >
+                    {p.stock_quantity} {p.unit}
+                  </td>
+                  <td className="p-4 font-mono">{money(p.sale_price_cents)}</td>
+                  {actor.role === "admin_remote" && (
+                    <>
+                      <td className="p-4 font-mono">{money(p.cost_price_cents ?? 0)}</td>
+                      <td className="p-4 font-mono text-primary">
+                        {p.sale_price_cents
+                          ? `${Math.round(((p.sale_price_cents - (p.cost_price_cents ?? 0)) / p.sale_price_cents) * 100)}%`
+                          : "—"}
+                      </td>
+                      <td className="p-4">
+                        <button
+                          type="button"
+                          className="font-semibold text-primary hover:underline"
+                          onClick={() => setEditing(p)}
+                        >
+                          Editar
+                        </button>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   );
 }
@@ -559,11 +743,14 @@ function ProductForm({
   onSave: (v: Partial<Product>) => Promise<void>;
 }) {
   const [v, setV] = useState(value);
-  const f = (key: keyof Product, label: string, type = "text") => (
-    <label className="block text-xs font-bold uppercase tracking-wide text-white/55">
+  const [salePrice, setSalePrice] = useState(formatReaisInput(value.sale_price_cents));
+  const [costPrice, setCostPrice] = useState(formatReaisInput(value.cost_price_cents));
+  const f = (key: keyof Product, label: string, type = "text", placeholder?: string) => (
+    <label className="block text-sm font-semibold text-white/75">
       {label}
       <input
         type={type}
+        placeholder={placeholder}
         value={(v[key] as string | number | undefined) ?? ""}
         onChange={(e) =>
           setV({ ...v, [key]: type === "number" ? Number(e.target.value) : e.target.value })
@@ -574,27 +761,73 @@ function ProductForm({
   );
   return (
     <div className="mb-5 rounded-2xl border border-primary/30 bg-primary/10 p-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {f("name", "Nome")}
-        {f("sku", "SKU")}
-        {f("barcode", "Código de barras")}
-        {f("category", "Categoria")}
-        {f("sale_price_cents", "Preço (centavos)", "number")}
-        {f("cost_price_cents", "Custo (centavos)", "number")}
-        {f("stock_quantity", "Estoque inicial", "number")}
-        {f("minimum_stock", "Estoque mínimo", "number")}
-        {f("reorder_point", "Ponto de pedido", "number")}
+      <div className="mb-5">
+        <p className="font-mono text-xs uppercase tracking-[.14em] text-primary">cadastro rápido</p>
+        <p className="mt-1 text-sm text-white/65">
+          Preencha só o que você sabe. O código interno será criado automaticamente se ficar em
+          branco.
+        </p>
       </div>
-      <div className="mt-4 flex gap-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {f("name", "Nome do produto", "text", "Ex.: Água mineral 500 ml")}
+        {f("category", "Categoria", "text", "Ex.: Bebidas")}
+        <label className="block text-sm font-semibold text-white/75">
+          Preço de venda (R$)
+          <input
+            inputMode="decimal"
+            value={salePrice}
+            onChange={(e) => setSalePrice(e.target.value)}
+            className="input mt-1"
+            placeholder="Ex.: 5,00"
+          />
+        </label>
+        {f("stock_quantity", "Quantidade que já chegou", "number", "Ex.: 24")}
+        {f("minimum_stock", "Avisar quando chegar em", "number", "Ex.: 5")}
+        {f("barcode", "Código de barras (opcional)", "text", "Pode deixar em branco")}
+      </div>
+      <details className="mt-4 rounded-xl border border-white/10 bg-black/10 p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-primary">
+          Opções avançadas
+        </summary>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <label className="block text-sm font-semibold text-white/75">
+            Custo de compra (R$)
+            <input
+              inputMode="decimal"
+              value={costPrice}
+              onChange={(e) => setCostPrice(e.target.value)}
+              className="input mt-1"
+              placeholder="Ex.: 2,50"
+            />
+          </label>
+          {f("unit", "Unidade", "text", "un")}
+          {f("reorder_point", "Ponto de reposição", "number", "Ex.: 10")}
+        </div>
+      </details>
+      <div className="mt-5 flex flex-wrap gap-2">
         <button
-          onClick={() => void onSave(v)}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+          onClick={() =>
+            void onSave({
+              ...v,
+              sku:
+                v.sku ||
+                `ARENA-${String(v.name || "PRODUTO")
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .replace(/[^a-zA-Z0-9]+/g, "-")
+                  .toUpperCase()
+                  .slice(0, 18)}-${Date.now().toString().slice(-4)}`,
+              sale_price_cents: parseReais(salePrice),
+              cost_price_cents: parseReais(costPrice),
+            })
+          }
+          className="rounded-lg bg-primary px-5 py-3 text-sm font-bold text-primary-foreground"
         >
-          Salvar SKU
+          Salvar produto
         </button>
         <button
           onClick={onClose}
-          className="rounded-lg border border-white/15 px-4 py-2 text-sm font-bold"
+          className="rounded-lg border border-white/15 px-5 py-3 text-sm font-bold"
         >
           Cancelar
         </button>
@@ -610,11 +843,12 @@ function Inventory() {
   const move = useServerFn(wmsStockMovement);
   const qc = useQueryClient();
   const [selected, setSelected] = useState("");
-  const [qty, setQty] = useState(0);
-  const [reason, setReason] = useState("");
+  const [qty, setQty] = useState(1);
+  const [reason, setReason] = useState("Compra de mercadoria");
   const products = (productsQ.data ?? []) as Product[];
   async function submit(type: "purchase_entry" | "manual_adjustment" | "loss") {
-    if (!selected || !reason) return toast.error("Selecione o produto e informe o motivo.");
+    if (!selected || !reason || qty === 0)
+      return toast.error("Escolha o produto, informe uma quantidade e o motivo.");
     try {
       await move({ data: { productId: selected, quantity: qty, movementType: type, reason } });
       toast.success("Movimentação registrada.");
@@ -630,12 +864,12 @@ function Inventory() {
       <Title
         eyebrow="controle físico"
         title="Inventário"
-        copy="Toda entrada, perda ou ajuste gera um movimento e uma auditoria."
+        copy="Use esta tela quando uma mercadoria chegar, quebrar ou precisar de correção. Cada ação fica registrada."
       />
       <div className="max-w-xl rounded-2xl border border-white/10 bg-[#211a23] p-5">
-        <Field label="Produto">
+        <Field label="Qual produto?">
           <select value={selected} onChange={(e) => setSelected(e.target.value)} className="input">
-            <option value="">Selecione…</option>
+            <option value="">Escolha um produto…</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name} · {p.stock_quantity} em estoque
@@ -644,19 +878,20 @@ function Inventory() {
           </select>
         </Field>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field label="Quantidade">
+          <Field label="Quantas unidades?">
             <input
               type="number"
+              min={1}
               value={qty}
               onChange={(e) => setQty(Number(e.target.value))}
               className="input"
             />
           </Field>
-          <Field label="Motivo">
+          <Field label="Por que está alterando?">
             <input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Ex.: compra do fornecedor"
+              placeholder="Ex.: compra do fornecedor, perda, conferência"
               className="input"
             />
           </Field>
@@ -666,19 +901,19 @@ function Inventory() {
             onClick={() => submit("purchase_entry")}
             className="rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground"
           >
-            Registrar entrada
+            Entraram mercadorias
           </button>
           <button
             onClick={() => submit("manual_adjustment")}
             className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold"
           >
-            Ajuste +/−
+            Corrigir quantidade
           </button>
           <button
             onClick={() => submit("loss")}
             className="rounded-xl border border-red-300/30 px-4 py-3 text-sm font-bold text-red-200"
           >
-            Registrar perda
+            Registrar perda/quebra
           </button>
         </div>
       </div>

@@ -157,26 +157,27 @@ export const wmsLogout = createServerFn({ method: "POST" }).handler(async () => 
 export const wmsDashboard = createServerFn({ method: "GET" }).handler(async () => {
   const actor = await currentActor();
   const db = getDb();
-  const [products, low, sales, revenue] = await Promise.all([
-    db`SELECT count(*)::int AS count FROM public.wms_products WHERE active = true`,
-    db`SELECT count(*)::int AS count FROM public.wms_products WHERE active = true AND stock_quantity <= minimum_stock`,
-    db`SELECT count(*)::int AS count FROM public.wms_sales WHERE status = 'completed' AND created_at >= current_date`,
-    db`SELECT coalesce(sum(total_cents),0)::int AS total FROM public.wms_sales WHERE status = 'completed' AND created_at >= current_date`,
-  ]);
+  const rows = (await db`
+    SELECT
+      (SELECT count(*)::int FROM public.wms_products WHERE active = true) AS products,
+      (SELECT count(*)::int FROM public.wms_products WHERE active = true AND stock_quantity <= minimum_stock) AS low_stock,
+      (SELECT count(*)::int FROM public.wms_sales WHERE status = 'completed' AND created_at >= current_date) AS sales_today,
+      (SELECT coalesce(sum(total_cents), 0)::int FROM public.wms_sales WHERE status = 'completed' AND created_at >= current_date) AS revenue_today,
+      (SELECT coalesce(sum(i.total_cents - (i.unit_cost_snapshot_cents * i.quantity)), 0)::int FROM public.wms_sale_items i JOIN public.wms_sales s ON s.id = i.sale_id WHERE s.status = 'completed' AND s.created_at >= current_date) AS gross_profit,
+      (SELECT coalesce(sum(i.unit_cost_snapshot_cents * i.quantity), 0)::int FROM public.wms_sale_items i JOIN public.wms_sales s ON s.id = i.sale_id WHERE s.status = 'completed' AND s.created_at >= current_date) AS cogs,
+      (SELECT coalesce(json_agg(movement), '[]'::json) FROM (SELECT m.id::text, p.name, m.movement_type, m.quantity, m.new_quantity, m.performed_by, m.created_at::text FROM public.wms_stock_movements m JOIN public.wms_products p ON p.id = m.product_id ORDER BY m.created_at DESC LIMIT 8) movement) AS recent_movements
+  `) as unknown as Array<Record<string, unknown>>;
+  const row = rows[0] ?? {};
   const result: Record<string, unknown> = {
-    products: Number((products as any)[0]?.count ?? 0),
-    lowStock: Number((low as any)[0]?.count ?? 0),
-    salesToday: Number((sales as any)[0]?.count ?? 0),
-    revenueTodayCents: Number((revenue as any)[0]?.total ?? 0),
+    products: Number(row.products ?? 0),
+    lowStock: Number(row.low_stock ?? 0),
+    salesToday: Number(row.sales_today ?? 0),
+    revenueTodayCents: Number(row.revenue_today ?? 0),
   };
   if (actor.role === "admin_remote") {
-    const [margin, movement] = await Promise.all([
-      db`SELECT coalesce(sum(i.total_cents - (i.unit_cost_snapshot_cents * i.quantity)),0)::int AS gross_profit, coalesce(sum(i.unit_cost_snapshot_cents * i.quantity),0)::int AS cogs FROM public.wms_sale_items i JOIN public.wms_sales s ON s.id = i.sale_id WHERE s.status = 'completed' AND s.created_at >= current_date`,
-      db`SELECT m.id::text, p.name, m.movement_type, m.quantity, m.new_quantity, m.performed_by, m.created_at::text FROM public.wms_stock_movements m JOIN public.wms_products p ON p.id = m.product_id ORDER BY m.created_at DESC LIMIT 8`,
-    ]);
-    result.grossProfitCents = Number((margin as any)[0]?.gross_profit ?? 0);
-    result.cogsCents = Number((margin as any)[0]?.cogs ?? 0);
-    result.recentMovements = movement;
+    result.grossProfitCents = Number(row.gross_profit ?? 0);
+    result.cogsCents = Number(row.cogs ?? 0);
+    result.recentMovements = row.recent_movements ?? [];
   }
   return { actor, ...result };
 });
@@ -324,13 +325,16 @@ export const wmsStockMovement = createServerFn({ method: "POST" })
           stock_quantity: number;
         }>;
       if (!rows[0]) throw new Error("Produto não encontrado.");
+      if (data.movementType === "purchase_entry" && data.quantity <= 0)
+        throw new Error("A entrada precisa ser maior que zero.");
+      if (data.movementType === "loss" && data.quantity <= 0)
+        throw new Error("Informe quantas unidades foram perdidas.");
+      const delta = data.movementType === "loss" ? -Math.abs(data.quantity) : data.quantity;
       const next =
-        data.movementType === "inventory_count"
-          ? data.quantity
-          : rows[0].stock_quantity + data.quantity;
+        data.movementType === "inventory_count" ? data.quantity : rows[0].stock_quantity + delta;
       if (next < 0) throw new Error("O estoque não pode ficar negativo.");
       await tx`UPDATE public.wms_products SET stock_quantity=${next}, updated_at=now() WHERE id=${data.productId}::uuid`;
-      await tx`INSERT INTO public.wms_stock_movements (product_id, movement_type, quantity, previous_quantity, new_quantity, reason, performed_by) VALUES (${data.productId}::uuid, ${data.movementType}, ${data.movementType === "inventory_count" ? next - rows[0].stock_quantity : data.quantity}, ${rows[0].stock_quantity}, ${next}, ${data.reason}, ${actor.name})`;
+      await tx`INSERT INTO public.wms_stock_movements (product_id, movement_type, quantity, previous_quantity, new_quantity, reason, performed_by) VALUES (${data.productId}::uuid, ${data.movementType}, ${data.movementType === "inventory_count" ? next - rows[0].stock_quantity : delta}, ${rows[0].stock_quantity}, ${next}, ${data.reason}, ${actor.name})`;
       await tx`INSERT INTO public.audit_logs (actor, action, entity, entity_id, details) VALUES (${actor.name}, 'wms.stock.movement', 'wms_product', ${data.productId}, ${JSON.stringify({ role: actor.role, ...data, newStock: next })}::jsonb)`;
       return { ok: true, stockQuantity: next };
     });
