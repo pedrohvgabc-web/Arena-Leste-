@@ -37,9 +37,14 @@ async function clearWmsCookie() {
 }
 async function adminActor(): Promise<Actor | null> {
   try {
-    const { requireAdmin } = await import("./admin-auth.server");
-    const id = await requireAdmin();
-    return { id, name: "Admin remoto", role: "admin_remote" };
+    const { requireAdminContext } = await import("./admin-auth.server");
+    const admin = await requireAdminContext();
+    if (admin.role === "midia") return null;
+    return {
+      id: admin.id,
+      name: admin.name,
+      role: admin.role === "master" ? "admin_remote" : "caixa_local",
+    };
   } catch {
     return null;
   }

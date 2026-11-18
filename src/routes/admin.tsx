@@ -23,6 +23,9 @@ import {
   adminDay,
   adminUpdateBooking,
   adminPending,
+  adminAudit,
+  adminUsers,
+  adminSaveUser,
 } from "@/lib/arena.functions";
 import { TournamentRegistrationsAdmin } from "@/components/TournamentRegistrationsAdmin";
 import { ArenaSettingsAdmin } from "@/components/ArenaSettingsAdmin";
@@ -30,7 +33,12 @@ import { CurrentBookingsAdmin } from "@/components/CurrentBookingsAdmin";
 import { AdminOverview } from "@/components/AdminOverview";
 import { AdminDataBackup } from "@/components/AdminDataBackup";
 import { PhotoGalleryAdmin } from "@/components/PhotoGalleryAdmin";
-import { ADMIN_MODULES, type AdminModuleId } from "@/lib/admin-navigation";
+import {
+  ADMIN_MODULES,
+  modulesForRole,
+  type AdminModuleId,
+  type AdminRole,
+} from "@/lib/admin-navigation";
 import { SITE } from "@/lib/site";
 import {
   arenaNow,
@@ -67,12 +75,13 @@ function Admin() {
         <Loader2 className="animate-spin" />
       </div>
     );
-  return q.data?.authed ? <Dashboard /> : <Login />;
+  return q.data?.authed && q.data.actor ? <Dashboard actor={q.data.actor} /> : <Login />;
 }
 
 function Login() {
   const login = useServerFn(adminLogin);
   const qc = useQueryClient();
+  const [username, setUsername] = useState("");
   const [pw, setPw] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -104,7 +113,7 @@ function Login() {
             e.preventDefault();
             setBusy(true);
             setErr(null);
-            const r = await login({ data: { password: pw } }).catch(() => ({
+            const r = await login({ data: { username, password: pw } }).catch(() => ({
               ok: false,
               error: "Falha de conexão.",
             }));
@@ -113,7 +122,18 @@ function Login() {
             else setErr(r.error);
           }}
         >
-          <p className="mono">Entre com sua senha de administrador.</p>
+          <p className="mono">Entre com seu nome de login e senha.</p>
+          <label htmlFor="admin-username" className="mono">
+            Nome de login
+          </label>
+          <input
+            id="admin-username"
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="login-input"
+          />
           <label htmlFor="pw" className="mono">
             Senha
           </label>
@@ -131,7 +151,7 @@ function Login() {
               {err}
             </p>
           )}
-          <button disabled={busy || !pw} className="btn pri lg">
+          <button disabled={busy || !pw || !username} className="btn pri lg">
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}Entrar
           </button>
         </form>
@@ -164,14 +184,21 @@ function formatAdminTimeRange(range: string) {
   return range.replace("24:00", "00:00");
 }
 
-function Dashboard() {
+function Dashboard({
+  actor,
+}: {
+  actor: { id: string; username: string; name: string; role: AdminRole };
+}) {
   const qc = useQueryClient();
   const [date, setDate] = useState(() => arenaNow().date);
   const [search, setSearch] = useState("");
   const [space, setSpace] = useState("all");
   const [status, setStatus] = useState("all");
   const [reveal, setReveal] = useState<string | null>(null);
-  const [activeModule, setActiveModule] = useState<AdminModuleId>("overview");
+  const allowedModules = modulesForRole(actor.role);
+  const [activeModule, setActiveModule] = useState<AdminModuleId>(
+    allowedModules[0]?.id ?? "overview",
+  );
   const fetchDay = useServerFn(adminDay);
   const update = useServerFn(adminUpdateBooking);
   const logout = useServerFn(adminLogout);
@@ -257,7 +284,7 @@ function Dashboard() {
         </Link>
         <p className="mono">Painel administrativo</p>
         <nav id="sbn" aria-label="Módulos administrativos">
-          {ADMIN_MODULES.map((module) => {
+          {allowedModules.map((module) => {
             const Icon = module.icon;
             const active = activeModule === module.id;
             return (
@@ -292,12 +319,19 @@ function Dashboard() {
         </button>
       </aside>
       <main id="conteudo" className="am">
-        <div className="admin-topbar">
+        <div className="admin-topbar flex flex-wrap items-center justify-between gap-3">
           <span className="mono">Arena Leste · Operação online</span>
+          <span className="mono text-primary">
+            {actor.name} ·{" "}
+            {actor.role === "master" ? "Admin Master" : actor.role === "caixa" ? "Caixa" : "Mídia"}
+          </span>
         </div>
         <div id="admin-module-content" className="swap">
           {activeModule === "overview" && (
-            <AdminOverview onNavigate={(module) => setActiveModule(module)} />
+            <AdminOverview
+              allowedModules={allowedModules.map((module) => module.id)}
+              onNavigate={(module) => setActiveModule(module)}
+            />
           )}
           {activeModule === "agenda" && <CurrentBookingsAdmin view="agenda" />}
           {activeModule === "reservations" && <CurrentBookingsAdmin view="reservations" />}
@@ -306,6 +340,8 @@ function Dashboard() {
           {activeModule === "gallery" && <PhotoGalleryAdmin />}
           {activeModule === "tournament" && <TournamentRegistrationsAdmin />}
           {activeModule === "backup" && <AdminDataBackup />}
+          {activeModule === "audit" && <AdminAudit />}
+          {activeModule === "users" && <AdminUsers />}
           {activeModule === "contact" && (
             <section aria-labelledby="admin-contact-heading">
               <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary">
@@ -582,6 +618,219 @@ function Dashboard() {
         </div>
       </main>
     </div>
+  );
+}
+
+function AdminAudit() {
+  const fetchAudit = useServerFn(adminAudit);
+  const query = useQuery({ queryKey: ["admin-audit"], queryFn: () => fetchAudit(), retry: false });
+  const rows = (query.data ?? []) as Array<{
+    id: string;
+    actor: string;
+    action: string;
+    entity: string | null;
+    details: Record<string, unknown> | null;
+    created_at: string;
+  }>;
+  return (
+    <section aria-labelledby="admin-audit-heading">
+      <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary">
+        controle Master
+      </p>
+      <h2 id="admin-audit-heading" className="mt-2 font-display text-4xl font-extrabold uppercase">
+        Alterações feitas
+      </h2>
+      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Registro de inclusões, alterações, exclusões e acessos feitos por qualquer perfil.
+      </p>
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="p-4">Usuário</th>
+              <th className="p-4">Data e hora</th>
+              <th className="p-4">Onde</th>
+              <th className="p-4">Alteração</th>
+              <th className="p-4">Detalhes</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td className="p-4 font-semibold">{row.actor}</td>
+                <td className="p-4 whitespace-nowrap text-muted-foreground">
+                  {new Date(row.created_at).toLocaleString("pt-BR")}
+                </td>
+                <td className="p-4">{row.entity ?? "—"}</td>
+                <td className="p-4 font-mono text-xs text-primary">{row.action}</td>
+                <td className="max-w-[280px] truncate p-4 text-xs text-muted-foreground">
+                  {row.details ? JSON.stringify(row.details) : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!query.isLoading && rows.length === 0 && (
+          <p className="p-8 text-center text-sm text-muted-foreground">
+            Nenhuma alteração registrada.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AdminUsers() {
+  const fetchUsers = useServerFn(adminUsers);
+  const saveUser = useServerFn(adminSaveUser);
+  const qc = useQueryClient();
+  const query = useQuery({ queryKey: ["admin-users"], queryFn: () => fetchUsers(), retry: false });
+  const [editing, setEditing] = useState<any>(null);
+  const users = (query.data ?? []) as Array<any>;
+  async function save() {
+    if (!editing) return;
+    try {
+      await saveUser({ data: editing });
+      toast.success("Acesso salvo.");
+      setEditing(null);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o acesso.");
+    }
+  }
+  return (
+    <section aria-labelledby="admin-users-heading">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+        <div>
+          <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary">
+            controle Master
+          </p>
+          <h2
+            id="admin-users-heading"
+            className="mt-2 font-display text-4xl font-extrabold uppercase"
+          >
+            Gerenciar acessos
+          </h2>
+        </div>
+        <button
+          type="button"
+          className="btn pri"
+          onClick={() =>
+            setEditing({ username: "", displayName: "", role: "caixa", password: "", active: true })
+          }
+        >
+          Novo acesso
+        </button>
+      </div>
+      <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+        Cadastre até quatro Caixas, dois usuários de Mídia e um Admin Master. O Master pode trocar
+        nome de login, senha e status.
+      </p>
+      {editing && (
+        <div className="mt-6 grid gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:grid-cols-2">
+          <label className="text-sm">
+            Nome de login
+            <input
+              className="login-input mt-1"
+              value={editing.username}
+              onChange={(e) => setEditing({ ...editing, username: e.target.value })}
+            />
+          </label>
+          <label className="text-sm">
+            Nome de exibição
+            <input
+              className="login-input mt-1"
+              value={editing.displayName}
+              onChange={(e) => setEditing({ ...editing, displayName: e.target.value })}
+            />
+          </label>
+          <label className="text-sm">
+            Perfil
+            <select
+              className="login-input mt-1"
+              value={editing.role}
+              onChange={(e) => setEditing({ ...editing, role: e.target.value })}
+            >
+              <option value="caixa">Caixa</option>
+              <option value="midia">Mídia</option>
+              <option value="master">Admin Master</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            Senha {editing.id ? "(opcional para manter)" : "inicial"}
+            <input
+              className="login-input mt-1"
+              type="password"
+              value={editing.password ?? ""}
+              onChange={(e) => setEditing({ ...editing, password: e.target.value })}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={editing.active}
+              onChange={(e) => setEditing({ ...editing, active: e.target.checked })}
+            />{" "}
+            Acesso ativo
+          </label>
+          <div className="flex gap-2 sm:justify-end">
+            <button type="button" className="btn" onClick={() => setEditing(null)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn pri" onClick={save}>
+              Salvar acesso
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
+        <table className="w-full min-w-[650px] text-left text-sm">
+          <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="p-4">Login</th>
+              <th className="p-4">Nome</th>
+              <th className="p-4">Perfil</th>
+              <th className="p-4">Status</th>
+              <th className="p-4">Ação</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {users.map((user) => (
+              <tr key={user.id}>
+                <td className="p-4 font-mono">{user.username}</td>
+                <td className="p-4">{user.display_name}</td>
+                <td className="p-4">
+                  {user.role === "master"
+                    ? "Admin Master"
+                    : user.role === "caixa"
+                      ? "Caixa"
+                      : "Mídia"}
+                </td>
+                <td className="p-4">{user.active ? "Ativo" : "Inativo"}</td>
+                <td className="p-4">
+                  <button
+                    type="button"
+                    className="font-semibold text-primary hover:underline"
+                    onClick={() =>
+                      setEditing({
+                        id: user.id,
+                        username: user.username,
+                        displayName: user.display_name,
+                        role: user.role,
+                        password: "",
+                        active: user.active,
+                      })
+                    }
+                  >
+                    Editar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

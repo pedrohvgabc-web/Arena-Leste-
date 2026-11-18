@@ -102,3 +102,33 @@ Integrar a nova versão enviada em `arena-leste-projeto.zip` ao site já operaci
 - **WMS:** preparar superfície `/estoque` para o preview e arquitetura de serviço separado. Produto inclui SKU, custo, venda e estoque mínimo; Caixa vê somente preço de venda e saldo; Admin Master vê custo, margem, preço e histórico. Saídas usam transação e bloqueio de linha para nunca permitir saldo negativo em concorrência.
 - **Subdomínio:** `estoque.arena-leste.com.br` não será considerado publicado até haver configuração de DNS, serviço Render separado e uma estratégia de sessão realmente compartilhável entre origens do domínio pai. O preview usa a mesma autorização server-side sem fingir que o cookie atual funciona em outro domínio.
 - **Validação:** manter alterações no branch/preview; testar visual em desktop/mobile e tentar acessar auditoria, usuários e custo/margem com Caixa antes de qualquer deploy do código.
+
+
+## Fase final — Perfis administrativos, auditoria e gestão de acessos
+
+**Assunto/público/ação principal:** painel administrativo da Arena Leste para Master, Caixa e Mídia; cada pessoa entra com seu próprio usuário e vê somente os módulos autorizados.
+
+**Escolha de design:** manter o painel operacional atual, com fundo escuro, acento laranja Arena, tipografia condensada e navegação lateral; adicionar uma faixa de identidade do usuário e uma área de gestão do Master com tabelas legíveis, estados de permissão claros e sem alterar o estilo existente.
+
+### Arquitetura
+
+- Criar `admin_users` com username, nome de exibição, hash de senha, perfil (`master`, `caixa`, `midia`), ativo e timestamps.
+- Associar `admin_sessions` ao usuário autenticado, mantendo compatibilidade com sessões Master legadas.
+- Centralizar `requireAdminContext()` e `requireAdminRole()` no backend; esconder abas no frontend não será a única proteção.
+- Atualizar o login `/admin` para aceitar nome de usuário e senha. O login legado com a senha administrativa atual cria/associa o usuário Master para a transição.
+- Criar endpoints Master-only para listar usuários, criar/renomear/desativar contas e alterar senhas; cada operação grava auditoria.
+- Criar endpoint Master-only para consultar todas as alterações administrativas com nome do usuário, horário, módulo, ação e detalhes.
+- Aplicar matriz: Caixa → Visão geral, Reservas, Horários; Mídia → Agenda, Torneio, Galeria; Master → todos os módulos, Alterações feitas e Gerenciar acessos.
+- Enforce no backend: Caixa não acessa agenda/torneio/galeria/usuários/auditoria; Mídia não acessa reservas/horários/usuários/auditoria; somente Master gerencia acessos e vê auditoria completa.
+
+### UI
+
+- Login com campos Usuário e Senha.
+- Sidebar filtrada pelo perfil, com perfil/nome no topo e indicação de acesso.
+- Aba `Alterações feitas`: tabela responsiva com usuário, data/hora, módulo, ação e detalhes.
+- Aba `Gerenciar acessos`: sete posições (1 Master, 4 Caixa, 2 Mídia), username, nome, status, troca de senha e ativação/desativação.
+- Preservar visual de cartões arredondados, preto/roxo profundo, laranja e fonte condensada.
+
+### Depois desta fase
+
+Otimizar a renderização e consultas de Visão geral e Auditoria com carregamento sob demanda, consultas agregadas e paginação, conforme pedido do usuário.

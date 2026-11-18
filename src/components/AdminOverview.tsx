@@ -23,6 +23,7 @@ type Summary = {
 
 type AdminOverviewProps = {
   onNavigate: (module: AdminModuleId) => void;
+  allowedModules?: AdminModuleId[];
 };
 
 function formatDate(date: string) {
@@ -35,7 +36,7 @@ function formatDate(date: string) {
   }).format(new Date(Date.UTC(year ?? 2026, (month ?? 1) - 1, day ?? 1, 12)));
 }
 
-export function AdminOverview({ onNavigate }: AdminOverviewProps) {
+export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps) {
   const fetchSummary = useServerFn(adminDashboardSummary);
   const query = useQuery({
     queryKey: ["admin-dashboard-summary"],
@@ -165,8 +166,10 @@ export function AdminOverview({ onNavigate }: AdminOverviewProps) {
                 Acesso rápido
               </h3>
               <div className="mt-3 divide-y divide-border">
-                {ADMIN_MODULES.filter((item) =>
-                  ["agenda", "courts", "tournament", "backup"].includes(item.id),
+                {ADMIN_MODULES.filter(
+                  (item) =>
+                    ["agenda", "courts", "tournament", "backup"].includes(item.id) &&
+                    (allowedModules ? allowedModules.includes(item.id) : true),
                 ).map((item) => {
                   const Icon = item.icon;
                   return (

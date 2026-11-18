@@ -102,3 +102,14 @@
 - [ ] **Adaptar o efeito para celular e acessibilidade** — usar o mesmo layout em tela pequena com cartões e percurso 3D ajustados ao viewport; respeitar movimento reduzido com galeria estática, conteúdo acessível por teclado/leitor de tela e nenhum recurso essencial dependente da animação. Se houver menos de quatro fotos publicadas, não simular uma galeria cheia; explicar no painel que a esteira é ativada depois que houver fotos suficientes.
 - [ ] **Gerenciar a biblioteca de fotos no admin** — incluir um módulo autenticado para enviar, editar título e texto alternativo, ordenar, publicar/ocultar e excluir fotos com confirmação. O usuário pediu que o administrador possa “tirar fotos, fazer upload de fotos e tudo mais” diretamente pelo painel.
 - [ ] **Persistir e entregar imagens com segurança e leveza** — otimizar os uploads no navegador para WebP de até 1.600 px e 600 KiB, validar novamente MIME/conteúdo/tamanho e autenticação no servidor, guardar metadados e bytes no Neon, limitar a biblioteca a 50 imagens e a esteira pública a 12 publicadas, servir somente imagens públicas autorizadas com cabeçalhos seguros/cache e registrar as alterações administrativas em auditoria. Não expor dados pessoais nem acrescentar serviço/segredo externo sem configuração.
+
+
+## Fase final — Contas, perfis e auditoria
+
+- [ ] Criar sete acessos administrativos individuais: um Master, quatro Caixa e dois Mídia, com nome de login, nome de exibição, senha, status ativo/inativo e troca de senha.
+- [ ] Garantir no backend que Caixa acessa somente Visão geral, Reservas e Horários; Mídia acessa somente Agenda, Torneio e Galeria; Master acessa todos os módulos.
+- [ ] Atualizar o login administrativo para exigir nome de usuário e senha, preservando a transição segura da senha administrativa atual para o usuário Master.
+- [ ] Criar a aba Master “Alterações feitas”, exclusiva do Master, com usuário, horário, módulo, ação e detalhes de cada inclusão, exclusão ou alteração.
+- [ ] Criar a aba Master de gerenciamento de usuários para alterar nomes de login, nomes de exibição, senhas e status das contas.
+- [ ] Registrar no log toda escrita administrativa e impedir acesso direto por endpoint quando o perfil não tiver permissão.
+- [ ] Depois da conclusão dos acessos, otimizar Visão geral e Auditoria com carregamento sob demanda, agregações e paginação.

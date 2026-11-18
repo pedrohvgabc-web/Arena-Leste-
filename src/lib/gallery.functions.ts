@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type postgres from "postgres";
 import { getDb } from "./db.server";
-import { requireAdmin } from "./admin-auth.server";
+import { requireAdminRole } from "./admin-auth.server";
 
 const MAX_IMAGE_BYTES = 600 * 1024;
 const MAX_GALLERY_PHOTOS = 1000;
@@ -105,7 +105,7 @@ export const getPublicGalleryPhotos = createServerFn({ method: "GET" }).handler(
 });
 
 export const adminGalleryPhotos = createServerFn({ method: "GET" }).handler(async () => {
-  await requireAdmin();
+  await requireAdminRole(["master", "midia"]);
   const db = getDb();
   const rows = (await db`
     SELECT id::text AS id, title, alt_text, sort_order, is_active
@@ -119,7 +119,7 @@ export const adminGalleryPhotos = createServerFn({ method: "GET" }).handler(asyn
 export const adminUploadGalleryPhoto = createServerFn({ method: "POST" })
   .inputValidator(photoInputSchema.extend({ imageDataUrl: z.string().max(900_000) }))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "midia"]);
     const imageData = decodeWebpDataUri(data.imageDataUrl);
     if (!imageData) {
       return { ok: false as const, error: "Envie uma imagem WebP válida de até 600 KiB." };
@@ -168,7 +168,7 @@ export const adminUploadGalleryPhoto = createServerFn({ method: "POST" })
 export const adminUpdateGalleryPhoto = createServerFn({ method: "POST" })
   .inputValidator(photoInputSchema.extend({ id: z.string().uuid(), isActive: z.boolean() }))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "midia"]);
     const db = getDb();
     try {
       return await db.begin(async (tx) => {
@@ -210,7 +210,7 @@ export const adminUpdateGalleryPhoto = createServerFn({ method: "POST" })
 export const adminMoveGalleryPhoto = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.string().uuid(), direction: z.enum(["up", "down"]) }))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "midia"]);
     const db = getDb();
     try {
       return await db.begin(async (tx) => {
@@ -254,7 +254,7 @@ export const adminMoveGalleryPhoto = createServerFn({ method: "POST" })
 export const adminDeleteGalleryPhoto = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "midia"]);
     const db = getDb();
     try {
       return await db.begin(async (tx) => {

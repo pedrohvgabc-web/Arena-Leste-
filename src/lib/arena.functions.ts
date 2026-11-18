@@ -1089,11 +1089,15 @@ const SESSION_HOURS = 8;
 
 async function requireAdmin() {
   const auth = await import("./admin-auth.server");
-  return auth.requireAdmin();
+  return auth.requireAdminContext();
+}
+async function requireAdminRole(roles: Array<"master" | "caixa" | "midia">) {
+  const auth = await import("./admin-auth.server");
+  return auth.requireAdminRole(roles);
 }
 
 export const adminTournamentRegistrations = createServerFn({ method: "GET" }).handler(async () => {
-  await requireAdmin();
+  await requireAdminRole(["master", "midia"]);
   const db = await database();
   const rows = (await db`
     SELECT id::text AS id, registration_code, captain_name, captain_phone, team_name,
@@ -1132,7 +1136,7 @@ export const adminSetTournamentRegistrationStatus = createServerFn({ method: "PO
     }),
   )
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "midia"]);
     const db = await database();
     return db.begin(async (tx) => {
       const rows = (await tx`
@@ -1156,36 +1160,68 @@ export const adminSetTournamentRegistrationStatus = createServerFn({ method: "PO
   });
 
 export const adminLogin = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ password: z.string().min(1).max(200) }))
+  .inputValidator(
+    z.object({ username: z.string().trim().min(1).max(80), password: z.string().min(1).max(200) }),
+  )
   .handler(async ({ data }) => {
     if (!(await rateLimit(`login:${await clientKey()}`, 5, 900)))
       return { ok: false, error: "Muitas tentativas. Tente novamente em 15 minutos." };
+    const auth = await import("./admin-auth.server");
+    const db = await database();
+    const username = data.username.toLowerCase().trim();
+    const passwordHash = await auth.sha256(data.password);
     const expected = process.env["ADMIN_PASSWORD"];
-    if (!expected) return { ok: false, error: "Acesso indisponível." };
-    const [actualHash, expectedHash] = await Promise.all([sha256(data.password), sha256(expected)]);
-    let diff = 0;
-    for (let i = 0; i < actualHash.length; i++)
-      diff |= actualHash.charCodeAt(i) ^ expectedHash.charCodeAt(i);
-    if (diff !== 0) {
-      await audit("anon", "admin.login_failed");
-      return { ok: false, error: "Credenciais inválidas." };
+    let actor: {
+      id: string;
+      username: string;
+      name: string;
+      role: "master" | "caixa" | "midia";
+    } | null = null;
+    if (
+      expected &&
+      ["admin", "master", "admin master", "admin@arena-leste.com.br"].includes(username) &&
+      passwordHash === (await auth.sha256(expected))
+    ) {
+      const rows = (await db`
+        INSERT INTO public.admin_users (username, display_name, password_hash, role, active)
+        VALUES ('master', 'Admin Master', ${passwordHash}, 'master', true)
+        ON CONFLICT (username) DO UPDATE SET display_name = 'Admin Master', role = 'master', active = true, updated_at = now()
+        RETURNING id::text, username, display_name AS name, role
+      `) as unknown as Array<{ id: string; username: string; name: string; role: "master" }>;
+      actor = rows[0] ?? null;
+    } else {
+      const rows = (await db`
+        SELECT id::text, username, display_name AS name, role
+        FROM public.admin_users
+        WHERE lower(username) = ${username} AND password_hash = ${passwordHash} AND active = true
+        LIMIT 1
+      `) as unknown as Array<{
+        id: string;
+        username: string;
+        name: string;
+        role: "master" | "caixa" | "midia";
+      }>;
+      actor = rows[0] ?? null;
+    }
+    if (!actor) {
+      await audit("anon", "admin.login_failed", "admin_user", undefined, { username });
+      return { ok: false, error: "Usuário ou senha inválidos." };
     }
     const token = randomCode(48, "abcdefghijklmnopqrstuvwxyz0123456789");
-    const db = await database();
     await db`
-      INSERT INTO public.admin_sessions (token_hash, expires_at)
-      VALUES (${await sha256(token)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)
+      INSERT INTO public.admin_sessions (user_id, token_hash, expires_at)
+      VALUES (${actor.id}::uuid, ${await auth.sha256(token)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)
     `;
     const { setCookie } = await import("@tanstack/react-start/server");
     setCookie(COOKIE, token, {
       httpOnly: true,
       secure: true,
-      sameSite: "none",
+      sameSite: "lax",
       path: "/",
       maxAge: SESSION_HOURS * 3600,
     });
-    await audit("admin", "admin.login");
-    return { ok: true, error: null };
+    await audit(actor.name, "admin.login", "admin_user", actor.id, { role: actor.role });
+    return { ok: true, error: null, actor };
   });
 
 export const adminLogout = createServerFn({ method: "POST" }).handler(async () => {
@@ -1195,21 +1231,92 @@ export const adminLogout = createServerFn({ method: "POST" }).handler(async () =
     const db = await database();
     await db`DELETE FROM public.admin_sessions WHERE token_hash = ${await sha256(token)}`;
   }
-  deleteCookie(COOKIE, { path: "/", secure: true, sameSite: "none" });
+  deleteCookie(COOKIE, { path: "/", secure: true, sameSite: "lax" });
   return { ok: true };
 });
 
 export const adminCheck = createServerFn({ method: "GET" }).handler(async () => {
   try {
-    await requireAdmin();
-    return { authed: true };
+    return { authed: true, actor: await requireAdmin() };
   } catch {
-    return { authed: false };
+    return { authed: false, actor: null };
   }
 });
 
+export const adminUsers = createServerFn({ method: "GET" }).handler(async () => {
+  await requireAdminRole(["master"]);
+  const db = await database();
+  return db`
+    SELECT id::text, username, display_name, role, active, created_at::text, updated_at::text
+    FROM public.admin_users ORDER BY CASE role WHEN 'master' THEN 0 WHEN 'caixa' THEN 1 ELSE 2 END, username
+  `;
+});
+
+const adminUserInput = z.object({
+  id: z.string().uuid().optional(),
+  username: z.string().trim().min(3).max(40),
+  displayName: z.string().trim().min(2).max(80),
+  role: z.enum(["master", "caixa", "midia"]),
+  password: z.string().min(8).max(200).optional(),
+  active: z.boolean().default(true),
+});
+
+export const adminSaveUser = createServerFn({ method: "POST" })
+  .inputValidator(adminUserInput)
+  .handler(async ({ data }) => {
+    const actor = await requireAdminRole(["master"]);
+    const db = await database();
+    if (!data.id && !data.password)
+      return { ok: false as const, error: "Informe uma senha inicial." };
+    const limits = { master: 1, caixa: 4, midia: 2 } as const;
+    const countRows = (await db`
+      SELECT count(*)::int AS count FROM public.admin_users
+      WHERE role=${data.role} AND active=true
+        AND (${data.id ?? null}::uuid IS NULL OR id <> ${data.id ?? null}::uuid)
+    `) as unknown as Array<{ count: number }>;
+    if (data.active && Number(countRows[0]?.count ?? 0) >= limits[data.role])
+      return {
+        ok: false as const,
+        error: `O limite de acessos ativos para ${data.role} foi atingido.`,
+      };
+    const passwordHash = data.password
+      ? await (await import("./admin-auth.server")).sha256(data.password)
+      : null;
+    const rows = data.id
+      ? await db`
+          UPDATE public.admin_users
+          SET username=${data.username.toLowerCase()}, display_name=${data.displayName}, role=${data.role}, active=${data.active},
+              password_hash=coalesce(${passwordHash}, password_hash), updated_at=now()
+          WHERE id=${data.id}::uuid
+          RETURNING id::text
+        `
+      : await db`
+          INSERT INTO public.admin_users (username, display_name, password_hash, role, active)
+          VALUES (${data.username.toLowerCase()}, ${data.displayName}, ${passwordHash}, ${data.role}, ${data.active})
+          RETURNING id::text
+        `;
+    const id = String((rows as unknown as Array<{ id: string }>)[0]?.id ?? data.id ?? "");
+    await audit(actor.name, data.id ? "admin.user.update" : "admin.user.create", "admin_user", id, {
+      username: data.username,
+      displayName: data.displayName,
+      role: data.role,
+      active: data.active,
+      passwordChanged: Boolean(data.password),
+    });
+    return { ok: true as const, id };
+  });
+
+export const adminAudit = createServerFn({ method: "GET" }).handler(async () => {
+  await requireAdminRole(["master"]);
+  const db = await database();
+  return db`
+    SELECT id::text, actor, action, entity, entity_id, details, created_at::text
+    FROM public.audit_logs ORDER BY created_at DESC LIMIT 300
+  `;
+});
+
 export const adminArenaSettings = createServerFn({ method: "GET" }).handler(async () => {
-  await requireAdmin();
+  await requireAdminRole(["master", "caixa"]);
   const db = await database();
   const [spaceRows, hourRows] = await Promise.all([
     db`
@@ -1276,7 +1383,7 @@ const adminSpaceSchema = z
 export const adminUpdateArenaSpace = createServerFn({ method: "POST" })
   .inputValidator(adminSpaceSchema)
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master"]);
     const db = await database();
     const result = await db.begin(async (tx) => {
       const found = (await tx`
@@ -1307,7 +1414,7 @@ const createArenaSpaceSchema = z.object({
 export const adminCreateArenaSpace = createServerFn({ method: "POST" })
   .inputValidator(createArenaSpaceSchema)
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master"]);
     const db = await database();
     const result = await db.begin(async (tx) => {
       await tx`SELECT pg_advisory_xact_lock(hashtext(${`arena-space:${data.unitId}`})::bigint)`;
@@ -1392,7 +1499,7 @@ export const adminUpdateArenaHours = createServerFn({ method: "POST" })
   .inputValidator(weeklyHoursSchema)
   .handler(async ({ data }) => {
     try {
-      await requireAdmin();
+      await requireAdminRole(["master"]);
       const db = await database();
       const rows = (await db`
         INSERT INTO public.arena_weekly_hours (unit_id, weekday, windows, updated_at)
@@ -1463,7 +1570,7 @@ const dateOverrideSchema = z
 export const adminGetArenaDateOverrides = createServerFn({ method: "GET" })
   .inputValidator(z.object({ year: z.number().int().min(2020).max(2200) }))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "caixa"]);
     const db = await database();
     const rows = (await db`
       SELECT unit_id, booking_date::text AS booking_date, label, windows
@@ -1488,7 +1595,7 @@ export const adminGetArenaDateOverrides = createServerFn({ method: "GET" })
 export const adminSaveArenaDateOverride = createServerFn({ method: "POST" })
   .inputValidator(dateOverrideSchema)
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master"]);
     const db = await database();
     await db`
       INSERT INTO public.arena_date_overrides (unit_id, booking_date, label, windows, updated_at)
@@ -1521,7 +1628,7 @@ export const adminDeleteArenaDateOverride = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master"]);
     if (!isValidDateISO(data.date)) return { ok: false as const, error: "Data inválida." };
     const db = await database();
     await db`
@@ -1578,7 +1685,7 @@ export const adminDay = createServerFn({ method: "GET" })
 export const adminCurrentDay = createServerFn({ method: "GET" })
   .inputValidator(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }))
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "caixa", "midia"]);
     const db = await database();
     await db`
       UPDATE public.bookings SET payment_status = 'expired', updated_at = now()
@@ -1624,7 +1731,7 @@ export const adminCurrentBookings = createServerFn({ method: "GET" })
       }, "O período precisa ser válido e não pode ultrapassar 90 dias."),
   )
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "caixa", "midia"]);
     const db = await database();
     await db`
       UPDATE public.bookings SET payment_status = 'expired', updated_at = now()
@@ -1654,7 +1761,7 @@ export const adminCurrentBookings = createServerFn({ method: "GET" })
   });
 
 export const adminPending = createServerFn({ method: "GET" }).handler(async () => {
-  await requireAdmin();
+  await requireAdminRole(["master", "caixa"]);
   const db = await database();
   await db`
     UPDATE public.bookings SET payment_status = 'expired', updated_at = now()
@@ -1686,7 +1793,7 @@ export const adminUpdateBooking = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master", "caixa"]);
     const db = await database();
     const now = new Date().toISOString();
     let releasedOffers: Array<{ spaceId: string; date: string; slots: ReleasedSlot[] }> = [];
@@ -1973,7 +2080,7 @@ const copyHoursSchema = z
 export const adminCopyArenaHours = createServerFn({ method: "POST" })
   .inputValidator(copyHoursSchema)
   .handler(async ({ data }) => {
-    await requireAdmin();
+    await requireAdminRole(["master"]);
     const db = await database();
     await db.begin(async (tx) => {
       for (const day of data.days) {
@@ -1996,7 +2103,7 @@ export const adminCopyArenaHours = createServerFn({ method: "POST" })
   });
 
 export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(async () => {
-  await requireAdmin();
+  await requireAdminRole(["master", "caixa"]);
   const db = await database();
   const date = arenaNow().date;
   const [statsRows, courtRows, tournamentRows, nextRows] = await Promise.all([
@@ -2068,7 +2175,7 @@ export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(a
 export const adminExportOperationalData = createServerFn({ method: "POST" })
   .inputValidator(z.object({ confirmed: z.literal(true) }))
   .handler(async () => {
-    await requireAdmin();
+    await requireAdminRole(["master"]);
     if (!(await rateLimit(`export:${await clientKey()}`, 3, 60))) {
       return {
         ok: false as const,
