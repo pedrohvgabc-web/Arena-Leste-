@@ -26,7 +26,6 @@ import {
 import {
   wmsAuthCheck,
   wmsCreateSale,
-  wmsCreateUser,
   wmsDashboard,
   wmsLogin,
   wmsLogout,
@@ -34,6 +33,8 @@ import {
   wmsSaveProduct,
   wmsStockMovement,
   wmsAudit,
+  wmsUsers,
+  wmsSaveUser,
 } from "@/lib/wms.functions";
 import { SITE } from "@/lib/site";
 
@@ -586,7 +587,7 @@ function Catalog({ actor }: { actor: Actor }) {
   const products = (q.data ?? []) as Product[];
   async function saveProduct(data: Partial<Product>) {
     try {
-      await save({
+      const result = await save({
         data: {
           ...data,
           name: data.name ?? "",
@@ -602,8 +603,16 @@ function Catalog({ actor }: { actor: Actor }) {
           isRental: data.is_rental ?? false,
         },
       });
+      if (!result.ok) throw new Error("Não foi possível salvar o produto.");
       toast.success("Produto salvo.");
       setEditing(null);
+      if (result.product) {
+        await qc.cancelQueries({ queryKey: ["wms-products"] });
+        qc.setQueryData<Product[]>(["wms-products"], (current = []) => {
+          const next = current.filter((item) => item.id !== result.product?.id);
+          return [...next, result.product as Product].sort((a, b) => a.name.localeCompare(b.name));
+        });
+      }
       await qc.invalidateQueries({ queryKey: ["wms-products"] });
       await qc.refetchQueries({ queryKey: ["wms-products"], type: "active" });
     } catch (e) {
@@ -649,7 +658,8 @@ function Catalog({ actor }: { actor: Actor }) {
       {q.isLoading && <Loading />}
       {q.error && (
         <div className="rounded-2xl border border-red-300/30 bg-red-950/20 p-5 text-sm text-red-100">
-          Não foi possível carregar os produtos. Atualize a página e tente novamente.
+          Não foi possível carregar os produtos.{" "}
+          {q.error instanceof Error ? q.error.message : "Atualize a página e tente novamente."}
         </div>
       )}
       {!q.isLoading && !q.error && products.length === 0 && (
@@ -982,19 +992,26 @@ function Audit() {
   );
 }
 function Users() {
-  const create = useServerFn(wmsCreateUser);
-  const [v, setV] = useState({
+  const fetchUsers = useServerFn(wmsUsers);
+  const saveUser = useServerFn(wmsSaveUser);
+  const qc = useQueryClient();
+  const query = useQuery({ queryKey: ["wms-users"], queryFn: () => fetchUsers(), retry: false });
+  const [v, setV] = useState<any>({
     username: "",
     displayName: "",
     password: "",
     role: "caixa_local" as "caixa_local" | "admin_remote",
+    active: true,
   });
+  const [editing, setEditing] = useState(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
     try {
-      await create({ data: v });
-      toast.success("Usuário criado.");
-      setV({ username: "", displayName: "", password: "", role: "caixa_local" });
+      await saveUser({ data: { ...v, password: v.password || undefined } });
+      toast.success(editing ? "Acesso atualizado." : "Usuário criado.");
+      setV({ username: "", displayName: "", password: "", role: "caixa_local", active: true });
+      setEditing(false);
+      await qc.invalidateQueries({ queryKey: ["wms-users"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível criar.");
     }
@@ -1004,8 +1021,54 @@ function Users() {
       <Title
         eyebrow="acessos"
         title="Usuários do WMS"
-        copy="Crie contas individuais. O Caixa não recebe custos nem margem."
+        copy="Crie ou edite os acessos do PDV. O Caixa vê apenas a operação e nunca recebe custos nem margem."
       />
+      {query.data && (
+        <div className="mb-5 overflow-x-auto rounded-2xl border border-white/10 bg-[#211a23]">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-white/10 text-xs uppercase text-white/40">
+              <tr>
+                <th className="p-4">Login</th>
+                <th className="p-4">Nome</th>
+                <th className="p-4">Perfil</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {(query.data as any[]).map((user) => (
+                <tr key={user.id}>
+                  <td className="p-4 font-mono">{user.username}</td>
+                  <td className="p-4">{user.display_name}</td>
+                  <td className="p-4">
+                    {user.role === "admin_remote" ? "Admin remoto" : "Caixa local"}
+                  </td>
+                  <td className="p-4">{user.active ? "Ativo" : "Inativo"}</td>
+                  <td className="p-4">
+                    <button
+                      type="button"
+                      className="font-semibold text-primary"
+                      onClick={() => {
+                        setV({
+                          id: user.id,
+                          username: user.username,
+                          displayName: user.display_name,
+                          password: "",
+                          role: user.role,
+                          active: user.active,
+                        });
+                        setEditing(true);
+                      }}
+                    >
+                      Editar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <form
         onSubmit={submit}
         className="max-w-2xl rounded-2xl border border-white/10 bg-[#211a23] p-5"
@@ -1027,7 +1090,7 @@ function Users() {
               className="input"
             />
           </Field>
-          <Field label="Senha">
+          <Field label={`Senha ${editing ? "(deixe em branco para manter)" : ""}`}>
             <input
               required
               minLength={8}
@@ -1047,11 +1110,39 @@ function Users() {
               <option value="admin_remote">Admin remoto</option>
             </select>
           </Field>
+          {editing && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={v.active}
+                onChange={(e) => setV({ ...v, active: e.target.checked })}
+              />{" "}
+              Acesso ativo
+            </label>
+          )}
         </div>
         <button className="mt-4 flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground">
           <UserPlus className="h-4 w-4" />
-          Criar conta
+          {editing ? "Salvar acesso" : "Criar conta"}
         </button>
+        {editing && (
+          <button
+            type="button"
+            className="ml-2 rounded-xl border border-white/15 px-4 py-3 text-sm font-bold"
+            onClick={() => {
+              setEditing(false);
+              setV({
+                username: "",
+                displayName: "",
+                password: "",
+                role: "caixa_local",
+                active: true,
+              });
+            }}
+          >
+            Cancelar
+          </button>
+        )}
       </form>
     </section>
   );

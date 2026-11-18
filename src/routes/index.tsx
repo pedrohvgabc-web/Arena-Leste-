@@ -39,6 +39,7 @@ const tickerText =
 
 function HomePage() {
   const [mapUnit, setMapUnit] = useState<(typeof SITE.units)[number]>(SITE.units[0]);
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
 
   useEffect(() => {
     const intro = document.querySelector<HTMLElement>("#intro");
@@ -491,16 +492,39 @@ function HomePage() {
           </nav>
         </div>
       </footer>
-      <a
-        className="wpp"
-        href={waLink(
-          `Olá! Vim pelo site da ${SITE.shortName} e gostaria de informações sobre agendamento.`,
-        )}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        Fale no WhatsApp
-      </a>
+      <div className={`wpp-menu${whatsappOpen ? " is-open" : ""}`}>
+        <div id="whatsapp-options" className="wpp-options" aria-hidden={!whatsappOpen}>
+          <a
+            className="wpp-option"
+            href={SITE.whatsappGroup}
+            target="_blank"
+            rel="noopener noreferrer"
+            tabIndex={whatsappOpen ? 0 : -1}
+          >
+            <span>Grupo Arena Leste</span>
+            <small>Entrar na comunidade ↗</small>
+          </a>
+          <a
+            className="wpp-option"
+            href={waLink(`Olá! Vim pelo site da ${SITE.shortName} e preciso tirar uma dúvida.`)}
+            target="_blank"
+            rel="noopener noreferrer"
+            tabIndex={whatsappOpen ? 0 : -1}
+          >
+            <span>Tirar dúvidas</span>
+            <small>{SITE.phoneDisplay} ↗</small>
+          </a>
+        </div>
+        <button
+          type="button"
+          className="wpp"
+          aria-expanded={whatsappOpen}
+          aria-controls="whatsapp-options"
+          onClick={() => setWhatsappOpen((open) => !open)}
+        >
+          {whatsappOpen ? "Fechar" : "Fale no WhatsApp"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -185,7 +185,7 @@ export const wmsDashboard = createServerFn({ method: "GET" }).handler(async () =
 export const wmsProducts = createServerFn({ method: "GET" }).handler(async () => {
   const actor = await currentActor();
   const rows =
-    (await getDb()`SELECT p.id::text, p.name, p.sku, p.barcode, p.unit, p.sale_price_cents, p.cost_price_cents, p.stock_quantity, p.minimum_stock, p.reorder_point, p.is_rental, p.active, coalesce(c.name,'Sem categoria') AS category FROM public.wms_products p LEFT JOIN public.wms_categories c ON c.id = p.category_id WHERE p.active = true ORDER BY p.name`) as unknown as Array<
+    (await getDb()`SELECT p.id::text, p.name, p.sku, p.barcode, p.unit, p.sale_price_cents::int, p.cost_price_cents::int, p.stock_quantity::int, p.minimum_stock::int, p.reorder_point::int, p.is_rental, p.active, coalesce(c.name,'Sem categoria') AS category FROM public.wms_products p LEFT JOIN public.wms_categories c ON c.id = p.category_id WHERE p.active = true ORDER BY lower(p.name), p.created_at DESC`) as unknown as Array<
       Record<string, unknown>
     >;
   return rows.map((row) =>
@@ -228,9 +228,10 @@ export const wmsSaveProduct = createServerFn({ method: "POST" })
     const actor = await requireRole(["admin_remote"]);
     const db = getDb();
     const category =
-      (await db`INSERT INTO public.wms_categories (name) VALUES (${data.category || "Sem categoria"}) ON CONFLICT (name) DO UPDATE SET name = excluded.name RETURNING id`) as unknown as Array<{
+      (await db`INSERT INTO public.wms_categories (name) VALUES (${data.category || "Sem categoria"}) ON CONFLICT (name) DO UPDATE SET name = excluded.name RETURNING id::text`) as unknown as Array<{
         id: string;
       }>;
+    if (!category[0]?.id) throw new Error("Não foi possível preparar a categoria do produto.");
     return db.begin(async (tx) => {
       let id = data.id;
       if (id) {
@@ -254,7 +255,11 @@ export const wmsSaveProduct = createServerFn({ method: "POST" })
         id = inserted[0].id;
       }
       await tx`INSERT INTO public.audit_logs (actor, action, entity, entity_id, details) VALUES (${actor.name}, 'wms.product.save', 'wms_product', ${id}, ${JSON.stringify({ role: actor.role, sku: data.sku })}::jsonb)`;
-      return { ok: true, id };
+      const saved =
+        (await tx`SELECT id::text, name, sku, barcode, unit, sale_price_cents::int, cost_price_cents::int, stock_quantity::int, minimum_stock::int, reorder_point::int, is_rental, active, ${data.category || "Sem categoria"} AS category FROM public.wms_products WHERE id=${id}::uuid`) as unknown as Array<
+          Record<string, unknown>
+        >;
+      return { ok: true, id, product: saved[0] ?? null };
     });
   });
 
@@ -366,4 +371,49 @@ export const wmsCreateUser = createServerFn({ method: "POST" })
       role: data.role,
     });
     return { ok: true, id: rows[0].id };
+  });
+
+const wmsUserInput = z.object({
+  id: z.string().uuid().optional(),
+  username: z.string().trim().min(3).max(40),
+  displayName: z.string().trim().min(2).max(80),
+  password: z.string().min(8).max(200).optional(),
+  role: z.enum(["admin_remote", "caixa_local"]),
+  active: z.boolean().default(true),
+});
+
+export const wmsUsers = createServerFn({ method: "GET" }).handler(async () => {
+  await requireRole(["admin_remote"]);
+  return getDb()`SELECT id::text, username, display_name, role, active, created_at::text FROM public.wms_users ORDER BY CASE role WHEN 'admin_remote' THEN 0 ELSE 1 END, username`;
+});
+
+export const wmsSaveUser = createServerFn({ method: "POST" })
+  .inputValidator(wmsUserInput)
+  .handler(async ({ data }) => {
+    const actor = await requireRole(["admin_remote"]);
+    const db = getDb();
+    if (!data.id && !data.password) throw new Error("Informe uma senha inicial.");
+    const username = data.username.toLowerCase();
+    const passwordHash = data.password ? await sha256(data.password) : null;
+    const rows = data.id
+      ? await db`
+          UPDATE public.wms_users
+          SET username=${username}, display_name=${data.displayName}, role=${data.role}, active=${data.active},
+              password_hash=coalesce(${passwordHash}, password_hash)
+          WHERE id=${data.id}::uuid RETURNING id::text
+        `
+      : await db`
+          INSERT INTO public.wms_users (username, display_name, password_hash, role, active)
+          VALUES (${username}, ${data.displayName}, ${passwordHash}, ${data.role}, ${data.active})
+          RETURNING id::text
+        `;
+    const id = String((rows as unknown as Array<{ id: string }>)[0]?.id ?? data.id ?? "");
+    await audit(actor, data.id ? "wms.user.update" : "wms.user.create", "wms_user", id, {
+      username,
+      displayName: data.displayName,
+      role: data.role,
+      active: data.active,
+      passwordChanged: Boolean(data.password),
+    });
+    return { ok: true, id };
   });

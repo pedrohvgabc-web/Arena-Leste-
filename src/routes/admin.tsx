@@ -40,6 +40,7 @@ import {
   type AdminRole,
 } from "@/lib/admin-navigation";
 import { SITE } from "@/lib/site";
+import { wmsSaveUser, wmsUsers } from "@/lib/wms.functions";
 import {
   arenaNow,
   formatBRL,
@@ -621,9 +622,74 @@ function Dashboard({
   );
 }
 
+function auditAction(action: string) {
+  const labels: Record<string, string> = {
+    "admin.login": "Entrou no painel",
+    "admin.login_failed": "Tentativa de entrada recusada",
+    "admin.user.create": "Criou um acesso",
+    "admin.user.update": "Alterou um acesso",
+    "arena.space.create": "Cadastrou uma quadra",
+    "arena.space.update": "Alterou uma quadra",
+    "arena.hours.update": "Alterou os horários",
+    "gallery.photo.upload": "Adicionou uma foto",
+    "gallery.photo.update": "Alterou uma foto",
+    "gallery.photo.move": "Moveu uma foto",
+    "gallery.photo.delete": "Excluiu uma foto",
+    "booking.create": "Criou uma reserva",
+    "booking.update": "Alterou uma reserva",
+    "booking.cancel": "Cancelou uma reserva",
+    "wms.product.save": "Cadastrou ou alterou um produto",
+    "wms.sale.create": "Registrou uma venda",
+    "wms.stock.movement": "Alterou o estoque",
+    "wms.user.create": "Criou um acesso do PDV",
+    "wms.user.update": "Alterou um acesso do PDV",
+    "wms.login": "Entrou no PDV",
+  };
+  return labels[action] ?? action.replace(/[._]/g, " ");
+}
+
+function auditPlace(row: { entity: string | null; action: string }) {
+  if (row.action.startsWith("wms.")) return "Estoque / PDV";
+  if (row.action.startsWith("gallery.")) return "Galeria de fotos";
+  if (row.action.startsWith("booking.")) return "Reservas";
+  if (row.action.startsWith("arena.")) return "Configurações da arena";
+  if (row.action.startsWith("admin.user.")) return "Usuários e acessos";
+  return row.entity ?? "Sistema";
+}
+
+function auditDetails(details: Record<string, unknown> | null) {
+  if (!details) return "Nenhum detalhe adicional.";
+  const entries = Object.entries(details).filter(
+    ([key]) => key !== "role" && key !== "passwordChanged",
+  );
+  if (!entries.length) return "Ação registrada no sistema.";
+  const labels: Record<string, string> = {
+    username: "login",
+    displayName: "nome",
+    role: "perfil",
+    active: "acesso ativo",
+    sku: "SKU",
+    total: "total",
+    newStock: "novo estoque",
+    reason: "motivo",
+    slots: "quantidade de horários",
+  };
+  return entries
+    .map(
+      ([key, value]) =>
+        `${labels[key] ?? key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`,
+    )
+    .join(" · ");
+}
+
 function AdminAudit() {
   const fetchAudit = useServerFn(adminAudit);
-  const query = useQuery({ queryKey: ["admin-audit"], queryFn: () => fetchAudit(), retry: false });
+  const [filters, setFilters] = useState({ dateFrom: "", dateTo: "", actionType: "all" });
+  const query = useQuery({
+    queryKey: ["admin-audit", filters],
+    queryFn: () => fetchAudit({ data: filters }),
+    retry: false,
+  });
   const rows = (query.data ?? []) as Array<{
     id: string;
     actor: string;
@@ -643,6 +709,49 @@ function AdminAudit() {
       <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
         Registro de inclusões, alterações, exclusões e acessos feitos por qualquer perfil.
       </p>
+      <div className="mt-6 grid gap-3 rounded-2xl border border-border bg-card/60 p-4 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
+        <label className="text-sm font-semibold">
+          De
+          <input
+            type="date"
+            className="login-input mt-1"
+            value={filters.dateFrom}
+            onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+          />
+        </label>
+        <label className="text-sm font-semibold">
+          Até
+          <input
+            type="date"
+            className="login-input mt-1"
+            value={filters.dateTo}
+            onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+          />
+        </label>
+        <label className="text-sm font-semibold">
+          Tipo de alteração
+          <select
+            className="login-input mt-1"
+            value={filters.actionType}
+            onChange={(e) => setFilters({ ...filters, actionType: e.target.value })}
+          >
+            <option value="all">Todas</option>
+            <option value="booking">Reservas</option>
+            <option value="schedule">Horários e quadras</option>
+            <option value="gallery">Fotos</option>
+            <option value="stock">Estoque e PDV</option>
+            <option value="users">Usuários e acessos</option>
+            <option value="login">Entradas no sistema</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setFilters({ dateFrom: "", dateTo: "", actionType: "all" })}
+        >
+          Limpar
+        </button>
+      </div>
       <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
@@ -650,7 +759,7 @@ function AdminAudit() {
               <th className="p-4">Usuário</th>
               <th className="p-4">Data e hora</th>
               <th className="p-4">Onde</th>
-              <th className="p-4">Alteração</th>
+              <th className="p-4">O que aconteceu</th>
               <th className="p-4">Detalhes</th>
             </tr>
           </thead>
@@ -661,10 +770,10 @@ function AdminAudit() {
                 <td className="p-4 whitespace-nowrap text-muted-foreground">
                   {new Date(row.created_at).toLocaleString("pt-BR")}
                 </td>
-                <td className="p-4">{row.entity ?? "—"}</td>
-                <td className="p-4 font-mono text-xs text-primary">{row.action}</td>
-                <td className="max-w-[280px] truncate p-4 text-xs text-muted-foreground">
-                  {row.details ? JSON.stringify(row.details) : "—"}
+                <td className="p-4">{auditPlace(row)}</td>
+                <td className="p-4 font-semibold text-primary">{auditAction(row.action)}</td>
+                <td className="max-w-[360px] p-4 text-xs text-muted-foreground">
+                  {auditDetails(row.details)}
                 </td>
               </tr>
             ))}
@@ -685,7 +794,15 @@ function AdminUsers() {
   const saveUser = useServerFn(adminSaveUser);
   const qc = useQueryClient();
   const query = useQuery({ queryKey: ["admin-users"], queryFn: () => fetchUsers(), retry: false });
+  const fetchWmsUsers = useServerFn(wmsUsers);
+  const saveWmsUser = useServerFn(wmsSaveUser);
+  const wmsQuery = useQuery({
+    queryKey: ["admin-wms-users"],
+    queryFn: () => fetchWmsUsers(),
+    retry: false,
+  });
   const [editing, setEditing] = useState<any>(null);
+  const [editingWms, setEditingWms] = useState<any>(null);
   const users = (query.data ?? []) as Array<any>;
   async function save() {
     if (!editing) return;
@@ -829,6 +946,149 @@ function AdminUsers() {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="mt-10 border-t border-border pt-8">
+        <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary">
+          acessos separados
+        </p>
+        <h3 className="mt-2 font-display text-3xl font-extrabold uppercase">Logins do WMS / PDV</h3>
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+          Altere o login, nome, senha ou status de quem entra no estoque e no caixa. A senha nunca
+          aparece na tela.
+        </p>
+        <button
+          type="button"
+          className="btn pri mt-4"
+          onClick={() =>
+            setEditingWms({
+              username: "",
+              displayName: "",
+              password: "",
+              role: "caixa_local",
+              active: true,
+            })
+          }
+        >
+          Novo acesso WMS
+        </button>
+        {editingWms && (
+          <div className="mt-4 grid gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-5 sm:grid-cols-2">
+            <label className="text-sm">
+              Login
+              <input
+                className="login-input mt-1"
+                value={editingWms.username}
+                onChange={(e) => setEditingWms({ ...editingWms, username: e.target.value })}
+              />
+            </label>
+            <label className="text-sm">
+              Nome
+              <input
+                className="login-input mt-1"
+                value={editingWms.displayName}
+                onChange={(e) => setEditingWms({ ...editingWms, displayName: e.target.value })}
+              />
+            </label>
+            <label className="text-sm">
+              Nova senha {editingWms.id ? "(opcional)" : ""}
+              <input
+                className="login-input mt-1"
+                type="password"
+                value={editingWms.password}
+                onChange={(e) => setEditingWms({ ...editingWms, password: e.target.value })}
+              />
+            </label>
+            <label className="text-sm">
+              Perfil
+              <select
+                className="login-input mt-1"
+                value={editingWms.role}
+                onChange={(e) => setEditingWms({ ...editingWms, role: e.target.value })}
+              >
+                <option value="caixa_local">Caixa local</option>
+                <option value="admin_remote">Admin remoto</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={editingWms.active}
+                onChange={(e) => setEditingWms({ ...editingWms, active: e.target.checked })}
+              />{" "}
+              Acesso ativo
+            </label>
+            <div className="flex gap-2 sm:justify-end">
+              <button type="button" className="btn" onClick={() => setEditingWms(null)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn pri"
+                onClick={async () => {
+                  try {
+                    await saveWmsUser({
+                      data: { ...editingWms, password: editingWms.password || undefined },
+                    });
+                    toast.success("Acesso WMS salvo.");
+                    setEditingWms(null);
+                    await wmsQuery.refetch();
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : "Não foi possível salvar o acesso WMS.",
+                    );
+                  }
+                }}
+              >
+                Salvar acesso
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="mt-5 overflow-x-auto rounded-2xl border border-border bg-card">
+          <table className="w-full min-w-[620px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="p-4">Login</th>
+                <th className="p-4">Nome</th>
+                <th className="p-4">Perfil</th>
+                <th className="p-4">Status</th>
+                <th className="p-4">Ação</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {((wmsQuery.data as any[]) ?? []).map((user) => (
+                <tr key={user.id}>
+                  <td className="p-4 font-mono">{user.username}</td>
+                  <td className="p-4">{user.display_name}</td>
+                  <td className="p-4">
+                    {user.role === "admin_remote" ? "Admin remoto" : "Caixa local"}
+                  </td>
+                  <td className="p-4">{user.active ? "Ativo" : "Inativo"}</td>
+                  <td className="p-4">
+                    <button
+                      type="button"
+                      className="font-semibold text-primary"
+                      onClick={() =>
+                        setEditingWms({
+                          id: user.id,
+                          username: user.username,
+                          displayName: user.display_name,
+                          password: "",
+                          role: user.role,
+                          active: user.active,
+                        })
+                      }
+                    >
+                      Editar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

@@ -1306,14 +1306,37 @@ export const adminSaveUser = createServerFn({ method: "POST" })
     return { ok: true as const, id };
   });
 
-export const adminAudit = createServerFn({ method: "GET" }).handler(async () => {
-  await requireAdminRole(["master"]);
-  const db = await database();
-  return db`
-    SELECT id::text, actor, action, entity, entity_id, details, created_at::text
-    FROM public.audit_logs ORDER BY created_at DESC LIMIT 300
-  `;
+const adminAuditInput = z.object({
+  dateFrom: z.string().trim().optional(),
+  dateTo: z.string().trim().optional(),
+  actionType: z.string().trim().max(40).optional(),
 });
+
+export const adminAudit = createServerFn({ method: "GET" })
+  .inputValidator(adminAuditInput)
+  .handler(async ({ data }) => {
+    await requireAdminRole(["master"]);
+    const db = await database();
+    const actionPrefix =
+      data.actionType && data.actionType !== "all"
+        ? ({
+            login: "%.login%",
+            booking: "booking.%",
+            gallery: "gallery.%",
+            stock: "wms.%",
+            users: "admin.user.%",
+            schedule: "arena.%",
+          }[data.actionType] ?? null)
+        : null;
+    return db`
+    SELECT id::text, actor, action, entity, entity_id, details, created_at::text
+    FROM public.audit_logs
+    WHERE (${data.dateFrom ?? null}::date IS NULL OR created_at >= ${data.dateFrom ?? null}::date)
+      AND (${data.dateTo ?? null}::date IS NULL OR created_at < (${data.dateTo ?? null}::date + interval '1 day'))
+      AND (${actionPrefix}::text IS NULL OR action LIKE ${actionPrefix})
+    ORDER BY created_at DESC LIMIT 300
+  `;
+  });
 
 export const adminArenaSettings = createServerFn({ method: "GET" }).handler(async () => {
   await requireAdminRole(["master", "caixa"]);
