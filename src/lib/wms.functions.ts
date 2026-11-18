@@ -26,14 +26,14 @@ async function setWmsCookie(value: string) {
   setCookie(WMS_COOKIE, value, {
     httpOnly: true,
     secure: true,
-    sameSite: "none",
+    sameSite: "lax",
     path: "/",
     maxAge: SESSION_HOURS * 3600,
   });
 }
 async function clearWmsCookie() {
   const { deleteCookie } = await import("@tanstack/react-start/server");
-  deleteCookie(WMS_COOKIE, { path: "/", secure: true, sameSite: "none" });
+  deleteCookie(WMS_COOKIE, { path: "/", secure: true, sameSite: "lax" });
 }
 async function adminActor(): Promise<Actor | null> {
   try {
@@ -111,7 +111,7 @@ export const wmsLogin = createServerFn({ method: "POST" })
         setCookie("ae_admin", adminToken, {
           httpOnly: true,
           secure: true,
-          sameSite: "none",
+          sameSite: "lax",
           path: "/",
           maxAge: SESSION_HOURS * 3600,
         });

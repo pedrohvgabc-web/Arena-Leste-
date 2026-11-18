@@ -80,6 +80,7 @@ function ScreenMessage({ text }: { text: string }) {
 }
 function Login() {
   const login = useServerFn(wmsLogin);
+  const authCheck = useServerFn(wmsAuthCheck);
   const qc = useQueryClient();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
@@ -93,8 +94,13 @@ function Login() {
         toast.error(result.error || "Credenciais inválidas.");
         return;
       }
+      const session = await authCheck();
+      if (!session.authed) {
+        toast.error("O login foi aceito, mas a sessão não foi gravada. Tente novamente.");
+        return;
+      }
       setPassword("");
-      await qc.invalidateQueries({ queryKey: ["wms-auth"] });
+      qc.setQueryData(["wms-auth"], session);
     } catch (error) {
       console.error("WMS login failed", error);
       toast.error(
