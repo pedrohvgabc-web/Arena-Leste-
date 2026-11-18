@@ -87,51 +87,59 @@ export const wmsLogin = createServerFn({ method: "POST" })
     z.object({ username: z.string().trim().min(1).max(80), password: z.string().min(1).max(200) }),
   )
   .handler(async ({ data }) => {
-    const db = getDb();
-    const adminPassword = process.env["ADMIN_PASSWORD"];
-    const rawUsername = data.username.toLowerCase().trim();
-    const normalizedUsername = rawUsername.replace(/[._-]+/g, " ").trim();
-    const isAdminUsername =
-      normalizedUsername === "admin" ||
-      normalizedUsername === "admin master" ||
-      normalizedUsername === "master" ||
-      normalizedUsername === "admin remoto" ||
-      normalizedUsername === "admin@arena leste.com br" ||
-      rawUsername === "admin@arena-leste.com.br";
-    if (
-      isAdminUsername &&
-      adminPassword &&
-      (await sha256(data.password)) === (await sha256(adminPassword))
-    ) {
-      const actor: Actor = { id: "admin", name: "Admin remoto", role: "admin_remote" };
-      const adminToken = token();
-      await db`INSERT INTO public.admin_sessions (token_hash, expires_at) VALUES (${await sha256(adminToken)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)`;
-      const { setCookie } = await import("@tanstack/react-start/server");
-      setCookie("ae_admin", adminToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        path: "/",
-        maxAge: SESSION_HOURS * 3600,
-      });
-      await audit(actor, "wms.login", "session", null, {});
+    try {
+      const db = getDb();
+      const adminPassword = process.env["ADMIN_PASSWORD"];
+      const rawUsername = data.username.toLowerCase().trim();
+      const normalizedUsername = rawUsername.replace(/[._-]+/g, " ").trim();
+      const isAdminUsername =
+        normalizedUsername === "admin" ||
+        normalizedUsername === "admin master" ||
+        normalizedUsername === "master" ||
+        normalizedUsername === "admin remoto" ||
+        normalizedUsername === "admin@arena leste.com br" ||
+        rawUsername === "admin@arena-leste.com.br";
+      if (
+        isAdminUsername &&
+        adminPassword &&
+        (await sha256(data.password)) === (await sha256(adminPassword))
+      ) {
+        const actor: Actor = { id: "admin", name: "Admin remoto", role: "admin_remote" };
+        const adminToken = token();
+        await db`INSERT INTO public.admin_sessions (token_hash, expires_at) VALUES (${await sha256(adminToken)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)`;
+        const { setCookie } = await import("@tanstack/react-start/server");
+        setCookie("ae_admin", adminToken, {
+          httpOnly: true,
+          secure: true,
+          sameSite: "none",
+          path: "/",
+          maxAge: SESSION_HOURS * 3600,
+        });
+        await audit(actor, "wms.login", "session", null, {});
+        return { ok: true, actor };
+      }
+      const rows =
+        (await db`SELECT id::text, display_name AS name, role, password_hash FROM public.wms_users WHERE username = ${data.username} AND active = true LIMIT 1`) as unknown as Array<{
+          id: string;
+          name: string;
+          role: Role;
+          password_hash: string;
+        }>;
+      if (!rows[0] || rows[0].password_hash !== (await sha256(data.password)))
+        return { ok: false, error: "Credenciais inválidas." };
+      const raw = token();
+      await db`INSERT INTO public.wms_sessions (user_id, token_hash, expires_at) VALUES (${rows[0].id}::uuid, ${await sha256(raw)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)`;
+      await setWmsCookie(raw);
+      const actor = { id: rows[0].id, name: rows[0].name, role: rows[0].role };
+      await audit(actor, "wms.login", "session", rows[0].id, {});
       return { ok: true, actor };
+    } catch (error) {
+      console.error("WMS login failed", error);
+      return {
+        ok: false,
+        error: "O servidor não conseguiu concluir o login. Tente novamente em instantes.",
+      };
     }
-    const rows =
-      (await db`SELECT id::text, display_name AS name, role, password_hash FROM public.wms_users WHERE username = ${data.username} AND active = true LIMIT 1`) as unknown as Array<{
-        id: string;
-        name: string;
-        role: Role;
-        password_hash: string;
-      }>;
-    if (!rows[0] || rows[0].password_hash !== (await sha256(data.password)))
-      return { ok: false, error: "Credenciais inválidas." };
-    const raw = token();
-    await db`INSERT INTO public.wms_sessions (user_id, token_hash, expires_at) VALUES (${rows[0].id}::uuid, ${await sha256(raw)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)`;
-    await setWmsCookie(raw);
-    const actor = { id: rows[0].id, name: rows[0].name, role: rows[0].role };
-    await audit(actor, "wms.login", "session", rows[0].id, {});
-    return { ok: true, actor };
   });
 
 export const wmsLogout = createServerFn({ method: "POST" }).handler(async () => {

@@ -87,10 +87,22 @@ function Login() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const result = await login({ data: { username, password } });
-    setBusy(false);
-    if (!result.ok) return toast.error(result.error);
-    await qc.invalidateQueries({ queryKey: ["wms-auth"] });
+    try {
+      const result = await login({ data: { username, password } });
+      if (!result.ok) {
+        toast.error(result.error || "Credenciais inválidas.");
+        return;
+      }
+      setPassword("");
+      await qc.invalidateQueries({ queryKey: ["wms-auth"] });
+    } catch (error) {
+      console.error("WMS login failed", error);
+      toast.error(
+        "Não foi possível concluir o login. Verifique a configuração do WMS e tente novamente.",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
   return (
     <main className="min-h-screen bg-[#171219] px-4 py-10 text-[#fff8f1]">
