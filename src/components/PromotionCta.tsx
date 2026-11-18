@@ -53,10 +53,22 @@ export function PromotionCta() {
         <span className="mono">ARENA LESTE · PROMOÇÃO ESPECIAL</span>
         <h2 id="landing-promo-title">Mais tempo na areia</h2>
         <p id="landing-promo-description">
-          Alugando acima de 2 horas, no Pix ou no dinheiro, você paga{" "}
-          <strong>R$ 40/h de domingo a quarta</strong> e <strong>R$ 45/h de quinta a sábado</strong>
-          .
+          Alugue acima de 2 horas pagando no Pix ou dinheiro e ative a tarifa especial.
         </p>
+        <ul className="booking-promo-dialog__rules">
+          <li>
+            <b>Domingo a quarta:</b> 18–19 R$40 · 19–21 R$80 · 21–23 R$80 · 23–00 R$40
+          </li>
+          <li>
+            <b>Quinta a sábado:</b> 18–19 R$50 · 19–21 R$100 · 21–23 R$100 · 23–00 R$50
+          </li>
+          <li>
+            <b>Acima de 2 horas:</b> R$40/h de domingo a quarta ou R$45/h de quinta a sábado.
+          </li>
+          <li>
+            O desconto de 10% corresponde à tarifa de R$45/h de quinta a sábado no Pix ou dinheiro.
+          </li>
+        </ul>
         <Link
           className="btn pri lg booking-promo-dialog__ok"
           to="/reservar"

@@ -4,6 +4,7 @@ export const SITE = {
   url: "https://arena-leste.onrender.com",
   logoUrl: "https://arena-leste.onrender.com/arena-leste-logo.png",
   whatsapp: "5569993566796",
+  whatsappGroup: "https://chat.whatsapp.com/GyjEaTjRHbv754PAOko4DT?s=sw&p=i&iam=2",
   phoneDisplay: "(69) 99356-6796",
   instagram: "https://www.instagram.com/arenalesteoficial/",
   reelTour: "https://www.instagram.com/reel/DVd5VWMALKs/",

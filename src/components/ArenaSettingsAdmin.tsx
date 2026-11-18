@@ -37,10 +37,12 @@ const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
 const DURATION_OPTIONS = [30, 45, 60, 90, 120];
 const DEFAULT_WEEKDAY_WINDOWS: OpeningWindow[] = [
+  { start: "18:00", end: "19:00", slotMinutes: 60 },
   { start: "19:00", end: "21:00", slotMinutes: 120 },
-  { start: "22:00", end: "24:00", slotMinutes: 120 },
+  { start: "21:00", end: "23:00", slotMinutes: 120 },
+  { start: "23:00", end: "24:00", slotMinutes: 60 },
 ];
-const DEFAULT_WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
+const DEFAULT_WEEKEND_WINDOWS = DEFAULT_WEEKDAY_WINDOWS;
 
 function centsFromText(value: string) {
   const normalized = value.trim().replace(",", ".");
@@ -279,8 +281,8 @@ export function ArenaSettingsAdmin({
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
               Para a quadra aparecer na reserva, configure o preço, marque “Ativa para reserva” e
               clique em “Salvar e liberar na reserva”. Quadras inativas ou sem preço ficam ocultas.
-              A grade padrão de segunda a sexta é 19:00–21:00 e 22:00–00:00; sábado, domingo e
-              feriados usam 15:00–24:00.
+              A grade padrão é 18:00–19:00, 19:00–21:00, 21:00–23:00 e 23:00–00:00. Feriados
+              continuam usando a grade especial configurada para feriados.
             </p>
           </div>
           <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-bold text-primary">
@@ -475,7 +477,7 @@ export function ArenaSettingsAdmin({
             <div>
               <h3 className="font-display text-2xl font-bold uppercase">Funcionamento semanal</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Defina até dois intervalos de abertura por dia. Deixe sem intervalos para marcar a
+                Defina até quatro intervalos de abertura por dia. Deixe sem intervalos para marcar a
                 unidade fechada.
               </p>
             </div>
@@ -602,7 +604,7 @@ export function ArenaSettingsAdmin({
                         </button>
                       </div>
                     ))}
-                    {windows.length + suggestedWindows.length <= 2 &&
+                    {windows.length + suggestedWindows.length <= 4 &&
                       suggestedWindows.length > 0 && (
                         <button
                           type="button"

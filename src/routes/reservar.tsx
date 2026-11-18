@@ -1266,12 +1266,13 @@ function Reservar() {
           </p>
           <ul className="booking-promo-dialog__rules">
             <li>
-              <b>Dom–Qua:</b> R$40/h
+              <b>Dom–Qua:</b> 18–19 R$40 · 19–21 R$80 · 21–23 R$80 · 23–00 R$40
             </li>
             <li>
-              <b>Qui–Sáb:</b> R$45/h
+              <b>Qui–Sáb:</b> 18–19 R$50 · 19–21 R$100 · 21–23 R$100 · 23–00 R$50
             </li>
-            <li>Mais de 2 horas · Pix ou dinheiro</li>
+            <li>Acima de 2 horas no Pix ou dinheiro: R$40/h Dom–Qua ou R$45/h Qui–Sáb.</li>
+            <li>R$45/h representa 10% de desconto sobre a tarifa normal de R$50/h.</li>
           </ul>
           <button
             type="button"

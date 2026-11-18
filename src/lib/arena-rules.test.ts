@@ -99,6 +99,21 @@ describe("regras de funcionamento configuráveis", () => {
       "Informe horários de abertura e fechamento válidos.",
     );
   });
+  it("aceita a grade comercial de quatro blocos e preserva os blocos de duas horas", () => {
+    const commercial: OpeningWindow[] = [
+      { start: "18:00", end: "19:00", slotMinutes: 60 },
+      { start: "19:00", end: "21:00", slotMinutes: 120 },
+      { start: "21:00", end: "23:00", slotMinutes: 120 },
+      { start: "23:00", end: "24:00", slotMinutes: 60 },
+    ];
+    expect(validateOpeningWindows(commercial)).toBeNull();
+    expect(slotsFor("2026-10-25", commercial)).toEqual([
+      { start: "18:00", end: "19:00" },
+      { start: "19:00", end: "21:00" },
+      { start: "21:00", end: "23:00" },
+      { start: "23:00", end: "24:00" },
+    ]);
+  });
   it("não sugere uma segunda janela se não houver um espaço de uma hora", () => {
     expect(suggestOpeningWindow([{ start: "08:00", end: "23:00" }])).toBeNull();
   });

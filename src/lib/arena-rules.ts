@@ -38,7 +38,7 @@ export const toHHMM = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
 export function validateOpeningWindows(windows: OpeningWindow[]) {
-  if (windows.length > 2) return "Defina no máximo dois intervalos por dia.";
+  if (windows.length > 4) return "Defina no máximo quatro blocos por dia.";
   const ordered = [...windows].sort((a, b) => toMin(a.start) - toMin(b.start));
   for (const [index, window] of ordered.entries()) {
     if (!validTime(window.start) || !validTime(window.end, true)) {

@@ -470,6 +470,10 @@ function HomePage() {
                 <span className="mono">Links oficiais</span>
                 <b>Todos os links</b>
               </a>
+              <a href={SITE.whatsappGroup} target="_blank" rel="noopener noreferrer">
+                <span className="mono">Comunidade Arena Leste</span>
+                <b>Entrar no grupo do WhatsApp ↗</b>
+              </a>
             </div>
           </div>
         </section>
