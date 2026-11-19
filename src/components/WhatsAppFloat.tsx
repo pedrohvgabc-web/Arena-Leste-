@@ -1,4 +1,5 @@
 import { useLocation } from "@tanstack/react-router";
+import { useState } from "react";
 import { SITE, waLink } from "@/lib/site";
 
 const WA_GLYPH =
@@ -6,23 +7,45 @@ const WA_GLYPH =
 
 export function WhatsAppFloat() {
   const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
   if (pathname.startsWith("/admin")) return null;
 
   return (
     <div className="wa-float-wrap pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-end px-4 sm:px-6">
-      <a
-        className="wa-float group pointer-events-auto flex items-center motion-safe:animate-pop-bounce"
-        href={waLink(
-          `Olá! Vim pelo site da ${SITE.shortName} e gostaria de informações sobre agendamento.`,
+      <div className="wa-float pointer-events-auto flex flex-col items-end gap-2">
+        {open && (
+          <div className="wa-menu" role="menu" aria-label="Opções de contato pelo WhatsApp">
+            <a
+              className="wa-menu__item"
+              href={SITE.whatsappGroup}
+              target="_blank"
+              rel="noopener noreferrer"
+              role="menuitem"
+            >
+              <strong>Entrar no grupo</strong>
+              <small>Novidades e horários da Arena</small>
+            </a>
+            <a
+              className="wa-menu__item"
+              href={waLink(
+                `Olá! Vim pelo site da ${SITE.shortName} e gostaria de informações sobre agendamento.`,
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              role="menuitem"
+            >
+              <strong>Falar com a Arena</strong>
+              <small>{SITE.phoneDisplay} · dúvidas e reservas</small>
+            </a>
+          </div>
         )}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Falar com a Arena Leste pelo WhatsApp: ${SITE.phoneDisplay}`}
-      >
-        <span className="max-w-0 truncate rounded-full border border-border bg-card/95 px-0 py-2 text-sm font-semibold whitespace-nowrap text-foreground opacity-0 shadow-lg backdrop-blur transition-all duration-500 group-hover:mr-3 group-hover:max-w-56 group-hover:px-4 group-hover:opacity-100 group-focus-visible:mr-3 group-focus-visible:max-w-56 group-focus-visible:px-4 group-focus-visible:opacity-100">
-          Fale no WhatsApp
-        </span>
-        <span className="btn-jelly relative grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full bg-whatsapp text-whatsapp-foreground shadow-wa sm:h-14 sm:w-14">
+        <button
+          type="button"
+          className="wa-float__button btn-jelly relative grid h-[52px] w-[52px] shrink-0 place-items-center rounded-full bg-whatsapp text-whatsapp-foreground shadow-wa sm:h-14 sm:w-14"
+          aria-expanded={open}
+          aria-label={open ? "Fechar opções do WhatsApp" : "Abrir opções do WhatsApp"}
+          onClick={() => setOpen((value) => !value)}
+        >
           <span className="wa-halo" aria-hidden="true" />
           <svg
             viewBox="0 0 24 24"
@@ -32,8 +55,8 @@ export function WhatsAppFloat() {
           >
             <path d={WA_GLYPH} />
           </svg>
-        </span>
-      </a>
+        </button>
+      </div>
     </div>
   );
 }

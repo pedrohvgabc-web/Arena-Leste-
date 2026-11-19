@@ -117,13 +117,18 @@ function slotDurationMinutes(slot: { start: string; end: string }) {
 }
 
 export const Route = createFileRoute("/reservar")({
-  loaderDeps: ({ search }) => ({ offerId: search.offer }),
+  loaderDeps: ({ search }) => ({ offerId: search.offer, unitId: search.unit }),
   loader: async ({ deps }) => {
-    const spaces = await getSpaces();
+    const unitId = UNIT_IDS.includes(deps.unitId as UnitId) ? (deps.unitId as UnitId) : "unidade-1";
+    const [spaces, openDates, releasedOffers] = await Promise.all([
+      getSpaces(),
+      getPublicBookingDates({ data: { unitId } }),
+      deps.offerId ? getPublicReleasedSlotOffers() : Promise.resolve([]),
+    ]);
     const releasedOffer = deps.offerId
-      ? ((await getPublicReleasedSlotOffers()).find((offer) => offer.id === deps.offerId) ?? null)
+      ? (releasedOffers.find((offer) => offer.id === deps.offerId) ?? null)
       : null;
-    return { spaces, releasedOffer };
+    return { spaces, openDates, releasedOffer };
   },
   validateSearch: (search: Record<string, unknown>) => ({
     unit: UNIT_IDS.includes(search["unit"] as UnitId) ? (search["unit"] as UnitId) : undefined,
@@ -157,7 +162,11 @@ export const Route = createFileRoute("/reservar")({
 
 function Reservar() {
   const search = Route.useSearch();
-  const { spaces: initialSpaces, releasedOffer } = Route.useLoaderData();
+  const {
+    spaces: initialSpaces,
+    openDates: initialOpenDates,
+    releasedOffer,
+  } = Route.useLoaderData();
   const fetchSpaces = useServerFn(getSpaces);
   const fetchPaymentConfig = useServerFn(getPublicPaymentConfig);
   const fetchDates = useServerFn(getPublicBookingDates);
@@ -268,8 +277,9 @@ function Reservar() {
   const datesQuery = useQuery({
     queryKey: ["booking-dates", unitId],
     queryFn: () => fetchDates({ data: { unitId } }),
+    initialData: unitId === (search.unit ?? "unidade-1") ? initialOpenDates : undefined,
     enabled: unitSpaces.length > 0,
-    staleTime: 60_000,
+    staleTime: 120_000,
   });
   const openDates = useMemo(() => datesQuery.data ?? [], [datesQuery.data]);
   const openDateSet = useMemo(() => new Set(openDates), [openDates]);

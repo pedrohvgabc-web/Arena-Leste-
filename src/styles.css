@@ -1387,3 +1387,68 @@
   background-color: rgb(255 249 242 / 0.95) !important;
   border-color: #e2d8ce !important;
 }
+
+/* WhatsApp: menu explícito e legível em fundo claro, inclusive no toque mobile. */
+.wa-menu {
+  display: grid;
+  width: min(19rem, calc(100vw - 2rem));
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 1px solid #d8c9bc;
+  border-radius: 1.1rem;
+  background: #ffffff;
+  box-shadow: 0 12px 34px rgb(43 25 14 / 0.2);
+  animation: wa-menu-in 220ms var(--ease-out) both;
+}
+.wa-menu__item {
+  display: grid;
+  gap: 0.2rem;
+  min-height: 3.25rem;
+  padding: 0.72rem 0.85rem;
+  border-radius: 0.8rem;
+  background: #fff7ef;
+  color: #281b15;
+  text-decoration: none;
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+.wa-menu__item strong {
+  color: #9d3d06;
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+.wa-menu__item small {
+  color: #57483f;
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+.wa-menu__item:hover,
+.wa-menu__item:focus-visible {
+  background: #ffead8;
+  transform: translateY(-1px);
+}
+.wa-float__button {
+  cursor: pointer;
+  border: 0;
+}
+.wa-float__button:focus-visible,
+.wa-menu__item:focus-visible {
+  outline: 3px solid #e85d04;
+  outline-offset: 3px;
+}
+@keyframes wa-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45rem) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wa-menu {
+    animation: none;
+  }
+}
