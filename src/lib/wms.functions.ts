@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getDb } from "./db.server";
 import { createInfinitePayCheckout } from "./payments.server";
+import { paymentCheckoutErrorMessage } from "./payment-errors";
 
 const WMS_COOKIE = "ae_wms";
 const SESSION_HOURS = 8;
@@ -11,10 +12,15 @@ export type WmsTab = "dashboard" | "balcao" | "catalogo" | "estoque" | "auditori
 type Actor = { id: string; name: string; role: Role; permissions: WmsTab[] };
 const ALL_TABS: WmsTab[] = ["dashboard", "balcao", "catalogo", "estoque", "auditoria", "usuarios"];
 const DEFAULT_CASHIER_TABS: WmsTab[] = ["balcao"];
+const CASHIER_ALLOWED_TABS: WmsTab[] = ["dashboard", "balcao", "catalogo"];
 function normalizeTabs(value: unknown, role: Role): WmsTab[] {
   if (role === "admin_remote") return ALL_TABS;
   if (!Array.isArray(value)) return DEFAULT_CASHIER_TABS;
-  return value.filter((tab): tab is WmsTab => ALL_TABS.includes(tab as WmsTab));
+  const allowed = value.filter(
+    (tab): tab is WmsTab =>
+      CASHIER_ALLOWED_TABS.includes(tab as WmsTab) && ALL_TABS.includes(tab as WmsTab),
+  );
+  return allowed.length ? allowed : DEFAULT_CASHIER_TABS;
 }
 
 async function sha256(value: string) {
@@ -416,7 +422,7 @@ export const wmsCreateCheckout = createServerFn({ method: "POST" })
       };
     } catch (error) {
       await db`UPDATE public.wms_sales SET status='cancelled' WHERE id=${sale.id}::uuid AND status='pending'`;
-      throw error;
+      return { ok: false as const, error: paymentCheckoutErrorMessage(error, "wms") };
     }
   });
 
@@ -463,7 +469,19 @@ export const wmsStockMovement = createServerFn({ method: "POST" })
 export const wmsAudit = createServerFn({ method: "GET" }).handler(async () => {
   const actor = await requireTab("auditoria");
   if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
-  return getDb()`SELECT id::text, actor, action, entity, entity_id, details, created_at::text FROM public.audit_logs WHERE action LIKE 'wms.%' ORDER BY created_at DESC LIMIT 120`;
+  const rows =
+    (await getDb()`SELECT id::text, actor, action, entity, entity_id, details, created_at::text FROM public.audit_logs WHERE action LIKE 'wms.%' ORDER BY created_at DESC LIMIT 120`) as unknown as Array<
+      Record<string, unknown>
+    >;
+  return rows.map((row) => ({
+    id: String(row.id),
+    actor: String(row.actor),
+    action: String(row.action),
+    entity: String(row.entity),
+    entity_id: row.entity_id == null ? null : String(row.entity_id),
+    details: row.details ?? {},
+    created_at: String(row.created_at),
+  }));
 });
 
 export const wmsCreateUser = createServerFn({ method: "POST" })
@@ -505,7 +523,22 @@ const wmsUserInput = z.object({
 export const wmsUsers = createServerFn({ method: "GET" }).handler(async () => {
   const actor = await requireTab("usuarios");
   if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
-  return getDb()`SELECT id::text, username, display_name, role, active, tab_permissions, created_at::text FROM public.wms_users ORDER BY CASE role WHEN 'admin_remote' THEN 0 ELSE 1 END, username`;
+  const rows =
+    (await getDb()`SELECT id::text, username, display_name, role, active, tab_permissions, created_at::text FROM public.wms_users ORDER BY CASE role WHEN 'admin_remote' THEN 0 ELSE 1 END, username`) as unknown as Array<
+      Record<string, unknown>
+    >;
+  return rows.map((row) => {
+    const role = row.role as Role;
+    return {
+      id: String(row.id),
+      username: String(row.username),
+      display_name: String(row.display_name),
+      role,
+      active: Boolean(row.active),
+      tab_permissions: normalizeTabs(row.tab_permissions, role),
+      created_at: String(row.created_at),
+    };
+  });
 });
 
 export const wmsSaveUser = createServerFn({ method: "POST" })

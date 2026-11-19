@@ -61,6 +61,48 @@ type Product = {
   reorder_point: number;
   is_rental: boolean;
 };
+type DashboardData = {
+  products: number;
+  lowStock: number;
+  salesToday: number;
+  revenueTodayCents: number;
+  grossProfitCents?: number;
+  cogsCents?: number;
+  recentMovements?: Array<{ id: string; name: string; quantity: number }>;
+};
+type AuditEntry = {
+  id: string;
+  created_at: string;
+  actor: string;
+  action: string;
+  details: unknown;
+};
+type WmsUser = {
+  id: string;
+  username: string;
+  display_name: string;
+  role: Actor["role"];
+  active: boolean;
+  tab_permissions: unknown;
+};
+type WmsUserDraft = {
+  id?: string;
+  username: string;
+  displayName: string;
+  password: string;
+  role: Actor["role"];
+  active: boolean;
+  permissions: WmsTab[];
+};
+const WMS_TAB_OPTIONS: Array<{ id: WmsTab; label: string }> = [
+  { id: "dashboard", label: "Visão geral" },
+  { id: "balcao", label: "Balcão / PDV" },
+  { id: "catalogo", label: "Catálogo" },
+  { id: "estoque", label: "Inventário" },
+  { id: "auditoria", label: "Auditoria" },
+  { id: "usuarios", label: "Usuários" },
+];
+const CASHIER_TAB_IDS: WmsTab[] = ["dashboard", "balcao", "catalogo"];
 const money = (cents: number) =>
   (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const roleLabel = (r: Actor["role"]) => (r === "admin_remote" ? "Admin remoto" : "Caixa local");
@@ -83,9 +125,10 @@ export const Route = createFileRoute("/estoque")({
 });
 
 function WmsPage() {
+  const checkAuth = useServerFn(wmsAuthCheck);
   const auth = useQuery({
     queryKey: ["wms-auth"],
-    queryFn: () => useServerFn(wmsAuthCheck)(),
+    queryFn: () => checkAuth(),
     retry: false,
   });
   if (auth.isLoading) return <ScreenMessage text="Abrindo operação…" />;
@@ -269,10 +312,15 @@ function WmsShell({ actor }: { actor: Actor }) {
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-[1500px] gap-1 overflow-x-auto px-4 pb-2 lg:px-8">
+        <nav
+          aria-label="Seções do Estoque e PDV"
+          className="mx-auto flex max-w-[1500px] gap-1 overflow-x-auto px-4 pb-2 lg:px-8"
+        >
           {tabs.map(([id, label, Icon]) => (
             <button
               key={id}
+              type="button"
+              aria-pressed={tab === id}
               onClick={() => setTab(id as string)}
               className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide ${tab === id ? "bg-primary text-primary-foreground" : "text-white/55 hover:bg-white/5 hover:text-white"}`}
             >
@@ -413,16 +461,18 @@ function FirstAccessGuide({
 }
 
 function Dashboard({ actor }: { actor: Actor }) {
+  const fetchDashboard = useServerFn(wmsDashboard);
   const q = useQuery({
     queryKey: ["wms-dashboard"],
-    queryFn: () => useServerFn(wmsDashboard)(),
+    queryFn: () => fetchDashboard(),
     refetchInterval: 30000,
     refetchOnMount: "always",
     staleTime: 30_000,
   });
-  const d = q.data as any;
+  const d = q.data as DashboardData | undefined;
   if (q.isLoading) return <Loading />;
   if (q.error && !d) return <DataError onRetry={() => void q.refetch()} />;
+  if (!d) return <Loading />;
   const cards = [
     ["Produtos ativos", d.products, Boxes],
     ["Abaixo do mínimo", d.lowStock, PackagePlus],
@@ -461,7 +511,7 @@ function Dashboard({ actor }: { actor: Actor }) {
           </article>
           <article className="rounded-2xl border border-white/10 bg-[#211a23] p-5">
             <h3 className="font-display text-xl font-bold uppercase">Últimas movimentações</h3>
-            {(d.recentMovements ?? []).slice(0, 5).map((m: any) => (
+            {(d.recentMovements ?? []).slice(0, 5).map((m) => (
               <div
                 key={m.id}
                 className="flex justify-between border-b border-white/10 py-2 text-sm"
@@ -480,9 +530,10 @@ function Dashboard({ actor }: { actor: Actor }) {
   );
 }
 function Counter() {
+  const fetchProducts = useServerFn(wmsProducts);
   const productsQ = useQuery({
     queryKey: ["wms-products"],
-    queryFn: () => useServerFn(wmsProducts)(),
+    queryFn: () => fetchProducts(),
     refetchOnMount: "always",
     staleTime: 30_000,
   });
@@ -521,11 +572,22 @@ function Counter() {
   }
   async function finishInfinitePay() {
     if (!items.length) return toast.error("Bipe ou selecione um produto.");
+    if (total < 100) return toast.error("A cobrança online exige um total mínimo de R$ 1,00.");
     try {
       const result = await createCheckout({
         data: { items: items.map((p) => ({ productId: p.id, quantity: cart[p.id] })) },
       });
-      window.location.href = result.checkoutUrl;
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      if (!result.checkoutUrl) {
+        toast.error(
+          "A InfinitePay não retornou um link de pagamento. Tente novamente ou use pagamento local.",
+        );
+        return;
+      }
+      window.location.assign(result.checkoutUrl);
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "Não foi possível abrir a cobrança InfinitePay.",
@@ -620,16 +682,25 @@ function Counter() {
             <span className="text-sm text-white/50">Total</span>
             <strong className="font-display text-4xl">{money(total)}</strong>
           </div>
+          {items.length > 0 && total < 100 && (
+            <p className="mt-2 text-xs text-amber-200">
+              Pix e cartão online exigem uma compra mínima de R$ 1,00.
+            </p>
+          )}
           <div className="mt-4 grid grid-cols-3 gap-2">
             <button
+              type="button"
               onClick={() => void finishInfinitePay()}
-              className="rounded-xl bg-primary px-2 py-3 text-xs font-bold text-primary-foreground"
+              disabled={total < 100}
+              className="rounded-xl bg-primary px-2 py-3 text-xs font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               Pix
             </button>
             <button
+              type="button"
               onClick={() => void finishInfinitePay()}
-              className="rounded-xl border border-white/15 px-2 py-3 text-xs font-bold"
+              disabled={total < 100}
+              className="rounded-xl border border-white/15 px-2 py-3 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40"
             >
               Cartão
             </button>
@@ -653,9 +724,10 @@ function Counter() {
   );
 }
 function Catalog({ actor }: { actor: Actor }) {
+  const fetchProducts = useServerFn(wmsProducts);
   const q = useQuery({
     queryKey: ["wms-products"],
-    queryFn: () => useServerFn(wmsProducts)(),
+    queryFn: () => fetchProducts(),
     refetchOnMount: "always",
     staleTime: 30_000,
   });
@@ -747,12 +819,7 @@ function Catalog({ actor }: { actor: Actor }) {
         <ProductForm value={editing} onClose={() => setEditing(null)} onSave={saveProduct} />
       )}
       {q.isLoading && <Loading />}
-      {q.error && products.length === 0 && (
-        <div className="rounded-2xl border border-red-300/30 bg-red-950/20 p-5 text-sm text-red-100">
-          Não foi possível carregar os produtos.{" "}
-          {q.error instanceof Error ? q.error.message : "Atualize a página e tente novamente."}
-        </div>
-      )}
+      {q.error && products.length === 0 && <DataError onRetry={() => void q.refetch()} />}
       {!q.isLoading && !q.error && products.length === 0 && (
         <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-8 text-center">
           <CheckCircle2 className="mx-auto h-8 w-8 text-primary" />
@@ -859,7 +926,7 @@ function ProductForm({
   onClose: () => void;
   onSave: (v: Partial<Product>) => Promise<void>;
 }) {
-  const [v, setV] = useState<any>(value);
+  const [v, setV] = useState<Partial<Product>>(value);
   const [salePrice, setSalePrice] = useState(formatReaisInput(value.sale_price_cents));
   const [costPrice, setCostPrice] = useState(formatReaisInput(value.cost_price_cents));
   const f = (key: keyof Product, label: string, type = "text", placeholder?: string) => (
@@ -961,9 +1028,10 @@ function ProductForm({
   );
 }
 function Inventory() {
+  const fetchProducts = useServerFn(wmsProducts);
   const productsQ = useQuery({
     queryKey: ["wms-products"],
-    queryFn: () => useServerFn(wmsProducts)(),
+    queryFn: () => fetchProducts(),
     staleTime: 30_000,
   });
   const move = useServerFn(wmsStockMovement);
@@ -973,7 +1041,7 @@ function Inventory() {
   const [reason, setReason] = useState("Compra de mercadoria");
   const products = (productsQ.data ?? []) as Product[];
   async function submit(type: "purchase_entry" | "manual_adjustment" | "loss") {
-    if (!selected || !reason || qty === 0)
+    if (!selected || reason.trim().length < 3 || qty === 0)
       return toast.error("Escolha o produto, informe uma quantidade e o motivo.");
     try {
       await move({ data: { productId: selected, quantity: qty, movementType: type, reason } });
@@ -992,6 +1060,13 @@ function Inventory() {
         title="Inventário"
         copy="Use esta tela quando uma mercadoria chegar, quebrar ou precisar de correção. Cada ação fica registrada."
       />
+      {productsQ.isLoading && <Loading />}
+      {productsQ.error && <DataError onRetry={() => void productsQ.refetch()} />}
+      {!productsQ.isLoading && !productsQ.error && products.length === 0 && (
+        <div className="mb-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-5 text-sm text-white/70">
+          Cadastre um produto no Catálogo antes de registrar entradas, ajustes ou perdas.
+        </div>
+      )}
       <div className="max-w-xl rounded-2xl border border-white/10 bg-[#211a23] p-5">
         <Field label="Qual produto?">
           <select value={selected} onChange={(e) => setSelected(e.target.value)} className="input">
@@ -1004,10 +1079,10 @@ function Inventory() {
           </select>
         </Field>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <Field label="Quantas unidades?">
+          <Field label="Quantidade / variação (+ ou −)">
             <input
               type="number"
-              min={1}
+              step={1}
               value={qty}
               onChange={(e) => setQty(Number(e.target.value))}
               className="input"
@@ -1033,7 +1108,7 @@ function Inventory() {
             onClick={() => submit("manual_adjustment")}
             className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold"
           >
-            Corrigir quantidade
+            Aplicar ajuste (+ / −)
           </button>
           <button
             onClick={() => submit("loss")}
@@ -1047,11 +1122,13 @@ function Inventory() {
   );
 }
 function Audit() {
+  const fetchAudit = useServerFn(wmsAudit);
   const q = useQuery({
     queryKey: ["wms-audit"],
-    queryFn: () => useServerFn(wmsAudit)(),
+    queryFn: () => fetchAudit(),
     staleTime: 30_000,
   });
+  const rows = (q.data ?? []) as AuditEntry[];
   return (
     <section>
       <Title
@@ -1075,7 +1152,7 @@ function Audit() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {((q.data as any[]) ?? []).map((row) => (
+              {rows.map((row) => (
                 <tr key={row.id}>
                   <td className="whitespace-nowrap p-4 font-mono text-xs text-white/45">
                     {new Date(row.created_at).toLocaleString("pt-BR")}
@@ -1104,20 +1181,33 @@ function Users() {
     retry: false,
     staleTime: 30_000,
   });
-  const [v, setV] = useState<any>({
+  const [v, setV] = useState<WmsUserDraft>({
     username: "",
     displayName: "",
     password: "",
     role: "caixa_local" as "caixa_local" | "admin_remote",
     active: true,
+    permissions: ["balcao"],
   });
+  const users = (query.data ?? []) as WmsUser[];
   const [editing, setEditing] = useState(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (v.role === "caixa_local" && v.permissions.length === 0) {
+      toast.error("Selecione ao menos uma aba para o acesso do caixa.");
+      return;
+    }
     try {
       await saveUser({ data: { ...v, password: v.password || undefined } });
       toast.success(editing ? "Acesso atualizado." : "Usuário criado.");
-      setV({ username: "", displayName: "", password: "", role: "caixa_local", active: true });
+      setV({
+        username: "",
+        displayName: "",
+        password: "",
+        role: "caixa_local",
+        active: true,
+        permissions: ["balcao"],
+      });
       setEditing(false);
       await qc.invalidateQueries({ queryKey: ["wms-users"] });
     } catch (e) {
@@ -1131,6 +1221,8 @@ function Users() {
         title="Usuários do WMS"
         copy="Crie ou edite os acessos do PDV. O Caixa vê apenas a operação e nunca recebe custos nem margem."
       />
+      {query.isLoading && <Loading />}
+      {query.error && !query.data && <DataError onRetry={() => void query.refetch()} />}
       {query.data && (
         <div className="mb-5 overflow-x-auto rounded-2xl border border-white/10 bg-[#211a23]">
           <table className="w-full text-left text-sm">
@@ -1144,7 +1236,7 @@ function Users() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {(query.data as any[]).map((user) => (
+              {users.map((user) => (
                 <tr key={user.id}>
                   <td className="p-4 font-mono">{user.username}</td>
                   <td className="p-4">{user.display_name}</td>
@@ -1164,6 +1256,14 @@ function Users() {
                           password: "",
                           role: user.role,
                           active: user.active,
+                          permissions:
+                            user.role === "admin_remote"
+                              ? WMS_TAB_OPTIONS.map((option) => option.id)
+                              : Array.isArray(user.tab_permissions)
+                                ? user.tab_permissions.filter((permission): permission is WmsTab =>
+                                    WMS_TAB_OPTIONS.some((option) => option.id === permission),
+                                  )
+                                : ["balcao"],
                         });
                         setEditing(true);
                       }}
@@ -1211,7 +1311,19 @@ function Users() {
           <Field label="Perfil">
             <select
               value={v.role}
-              onChange={(e) => setV({ ...v, role: e.target.value as Actor["role"] })}
+              onChange={(e) => {
+                const role = e.target.value as Actor["role"];
+                setV({
+                  ...v,
+                  role,
+                  permissions:
+                    role === "admin_remote"
+                      ? WMS_TAB_OPTIONS.map((option) => option.id)
+                      : v.role === "admin_remote"
+                        ? ["balcao"]
+                        : v.permissions,
+                });
+              }}
               className="input"
             >
               <option value="caixa_local">Caixa local</option>
@@ -1229,6 +1341,32 @@ function Users() {
             </label>
           )}
         </div>
+        {v.role === "caixa_local" && (
+          <fieldset className="mt-4 rounded-xl border border-white/10 p-4">
+            <legend className="px-2 text-sm font-semibold">Abas que este caixa pode acessar</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {WMS_TAB_OPTIONS.filter((option) => CASHIER_TAB_IDS.includes(option.id)).map(
+                (option) => (
+                  <label key={option.id} className="flex items-center gap-2 text-sm text-white/75">
+                    <input
+                      type="checkbox"
+                      checked={v.permissions.includes(option.id)}
+                      onChange={(event) =>
+                        setV((current) => ({
+                          ...current,
+                          permissions: event.target.checked
+                            ? [...new Set([...current.permissions, option.id])]
+                            : current.permissions.filter((permission) => permission !== option.id),
+                        }))
+                      }
+                    />
+                    {option.label}
+                  </label>
+                ),
+              )}
+            </div>
+          </fieldset>
+        )}
         <button className="mt-4 flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground">
           <UserPlus className="h-4 w-4" />
           {editing ? "Salvar acesso" : "Criar conta"}
@@ -1245,6 +1383,7 @@ function Users() {
                 password: "",
                 role: "caixa_local",
                 active: true,
+                permissions: ["balcao"],
               });
             }}
           >

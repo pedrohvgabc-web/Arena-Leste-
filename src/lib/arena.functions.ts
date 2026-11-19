@@ -23,6 +23,7 @@ import { normalizeValidCpf } from "./customer-data";
 import { tournamentRegistrationSchema } from "./tournament-schema";
 import { TOURNAMENT } from "./site";
 import { arenaHolidaysForYear } from "./holidays";
+import { paymentCheckoutErrorMessage } from "./payment-errors";
 
 type SpaceRow = {
   id: string;
@@ -83,11 +84,7 @@ type PublicBookingRow = {
   checkout_url: string | null;
 };
 function infinitePayCheckoutError(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  if (message.includes("External checkout is not enabled")) {
-    return "A conta InfinitePay está com o Checkout Integrado desativado. Ative essa opção no painel da InfinitePay e tente novamente.";
-  }
-  return "A reserva foi registrada, mas o checkout não abriu. Tente novamente em instantes.";
+  return paymentCheckoutErrorMessage(error, "booking");
 }
 type AdminSessionRow = { id: string };
 type BookingAdminRow = {
