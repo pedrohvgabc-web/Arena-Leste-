@@ -82,6 +82,13 @@ type PublicBookingRow = {
   is_simulated: boolean | null;
   checkout_url: string | null;
 };
+function infinitePayCheckoutError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("External checkout is not enabled")) {
+    return "A conta InfinitePay está com o Checkout Integrado desativado. Ative essa opção no painel da InfinitePay e tente novamente.";
+  }
+  return "A reserva foi registrada, mas o checkout não abriu. Tente novamente em instantes.";
+}
 type AdminSessionRow = { id: string };
 type BookingAdminRow = {
   id: string;
@@ -518,8 +525,7 @@ export const createBooking = createServerFn({ method: "POST" })
           });
           return {
             ok: false as const,
-            error:
-              "A reserva foi registrada, mas o checkout não abriu. Tente novamente em instantes.",
+            error: infinitePayCheckoutError(error),
           };
         }
       }
@@ -746,8 +752,7 @@ export const createBooking = createServerFn({ method: "POST" })
           });
           return {
             ok: false as const,
-            error:
-              "A reserva foi registrada, mas o checkout não abriu. Tente novamente em instantes.",
+            error: infinitePayCheckoutError(error),
           };
         }
       }
@@ -791,11 +796,14 @@ export const createBooking = createServerFn({ method: "POST" })
               await (
                 await import("./payment-processing.server")
               ).ensureBookingCheckout(previousCode);
-            } catch {
+            } catch (error) {
+              console.error("InfinitePay conflict retry checkout failed", {
+                groupCode: previousCode,
+                error: error instanceof Error ? error.message.slice(0, 180) : "UNKNOWN_ERROR",
+              });
               return {
                 ok: false as const,
-                error:
-                  "A reserva foi registrada, mas o checkout não abriu. Tente novamente em instantes.",
+                error: infinitePayCheckoutError(error),
               };
             }
           }
