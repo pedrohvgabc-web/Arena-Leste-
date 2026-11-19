@@ -1,12 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getDb } from "./db.server";
+import { createInfinitePayCheckout } from "./payments.server";
 
 const WMS_COOKIE = "ae_wms";
 const SESSION_HOURS = 8;
 
 type Role = "admin_remote" | "caixa_local";
-type Actor = { id: string; name: string; role: Role };
+export type WmsTab = "dashboard" | "balcao" | "catalogo" | "estoque" | "auditoria" | "usuarios";
+type Actor = { id: string; name: string; role: Role; permissions: WmsTab[] };
+const ALL_TABS: WmsTab[] = ["dashboard", "balcao", "catalogo", "estoque", "auditoria", "usuarios"];
+const DEFAULT_CASHIER_TABS: WmsTab[] = ["balcao"];
+function normalizeTabs(value: unknown, role: Role): WmsTab[] {
+  if (role === "admin_remote") return ALL_TABS;
+  if (!Array.isArray(value)) return DEFAULT_CASHIER_TABS;
+  return value.filter((tab): tab is WmsTab => ALL_TABS.includes(tab as WmsTab));
+}
 
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -44,6 +53,7 @@ async function adminActor(): Promise<Actor | null> {
       id: admin.id,
       name: admin.name,
       role: admin.role === "master" ? "admin_remote" : "caixa_local",
+      permissions: admin.role === "master" ? ALL_TABS : DEFAULT_CASHIER_TABS,
     };
   } catch {
     return null;
@@ -56,16 +66,26 @@ async function currentActor(): Promise<Actor> {
   if (!session) throw new Error("UNAUTHORIZED");
   const db = getDb();
   const rows = (await db`
-    SELECT u.id::text, u.display_name AS name, u.role
+    SELECT u.id::text, u.display_name AS name, u.role, u.tab_permissions
     FROM public.wms_sessions s JOIN public.wms_users u ON u.id = s.user_id
     WHERE s.token_hash = ${await sha256(session)} AND s.expires_at > now() AND u.active = true LIMIT 1
-  `) as unknown as Array<{ id: string; name: string; role: Role }>;
+  `) as unknown as Array<{ id: string; name: string; role: Role; tab_permissions: unknown }>;
   if (!rows[0]) throw new Error("UNAUTHORIZED");
-  return rows[0];
+  return { ...rows[0], permissions: normalizeTabs(rows[0].tab_permissions, rows[0].role) };
 }
 async function requireRole(roles: Role[]) {
   const actor = await currentActor();
   if (!roles.includes(actor.role)) throw new Error("FORBIDDEN");
+  return actor;
+}
+async function requireTab(tab: WmsTab) {
+  const actor = await currentActor();
+  if (!actor.permissions.includes(tab)) throw new Error("FORBIDDEN_TAB");
+  return actor;
+}
+async function requireAnyTab(tabs: WmsTab[]) {
+  const actor = await currentActor();
+  if (!tabs.some((tab) => actor.permissions.includes(tab))) throw new Error("FORBIDDEN_TAB");
   return actor;
 }
 async function audit(
@@ -109,7 +129,12 @@ export const wmsLogin = createServerFn({ method: "POST" })
         adminPassword &&
         (await sha256(data.password)) === (await sha256(adminPassword))
       ) {
-        const actor: Actor = { id: "admin", name: "Admin remoto", role: "admin_remote" };
+        const actor: Actor = {
+          id: "admin",
+          name: "Admin remoto",
+          role: "admin_remote",
+          permissions: ALL_TABS,
+        };
         const adminToken = token();
         await db`INSERT INTO public.admin_sessions (token_hash, expires_at) VALUES (${await sha256(adminToken)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)`;
         const { setCookie } = await import("@tanstack/react-start/server");
@@ -124,18 +149,27 @@ export const wmsLogin = createServerFn({ method: "POST" })
         return { ok: true, actor };
       }
       const rows =
-        (await db`SELECT id::text, display_name AS name, role, password_hash FROM public.wms_users WHERE username = ${data.username} AND active = true LIMIT 1`) as unknown as Array<{
+        (await db`SELECT id::text, display_name AS name, role, password_hash, tab_permissions FROM public.wms_users WHERE username = ${data.username} AND active = true LIMIT 1`) as unknown as Array<{
           id: string;
           name: string;
           role: Role;
           password_hash: string;
+          tab_permissions: unknown;
         }>;
       if (!rows[0] || rows[0].password_hash !== (await sha256(data.password)))
         return { ok: false, error: "Credenciais inválidas." };
       const raw = token();
       await db`INSERT INTO public.wms_sessions (user_id, token_hash, expires_at) VALUES (${rows[0].id}::uuid, ${await sha256(raw)}, ${new Date(Date.now() + SESSION_HOURS * 3600e3).toISOString()}::timestamptz)`;
       await setWmsCookie(raw);
-      const actor = { id: rows[0].id, name: rows[0].name, role: rows[0].role };
+      const actor = {
+        id: rows[0].id,
+        name: rows[0].name,
+        role: rows[0].role,
+        permissions: normalizeTabs(
+          (rows[0] as { tab_permissions?: unknown }).tab_permissions,
+          rows[0].role,
+        ),
+      };
       await audit(actor, "wms.login", "session", rows[0].id, {});
       return { ok: true, actor };
     } catch (error) {
@@ -155,7 +189,7 @@ export const wmsLogout = createServerFn({ method: "POST" }).handler(async () => 
 });
 
 export const wmsDashboard = createServerFn({ method: "GET" }).handler(async () => {
-  const actor = await currentActor();
+  const actor = await requireTab("dashboard");
   const db = getDb();
   const rows = (await db`
     SELECT
@@ -183,7 +217,7 @@ export const wmsDashboard = createServerFn({ method: "GET" }).handler(async () =
 });
 
 export const wmsProducts = createServerFn({ method: "GET" }).handler(async () => {
-  const actor = await currentActor();
+  const actor = await requireAnyTab(["balcao", "catalogo", "estoque"]);
   const rows =
     (await getDb()`SELECT p.id::text, p.name, p.sku, p.barcode, p.unit, p.sale_price_cents::int, p.cost_price_cents::int, p.stock_quantity::int, p.minimum_stock::int, p.reorder_point::int, p.is_rental, p.active, coalesce(c.name,'Sem categoria') AS category FROM public.wms_products p LEFT JOIN public.wms_categories c ON c.id = p.category_id WHERE p.active = true ORDER BY lower(p.name), p.created_at DESC`) as unknown as Array<
       Record<string, unknown>
@@ -225,7 +259,8 @@ const productInput = z.object({
 export const wmsSaveProduct = createServerFn({ method: "POST" })
   .inputValidator(productInput)
   .handler(async ({ data }) => {
-    const actor = await requireRole(["admin_remote"]);
+    const actor = await requireTab("catalogo");
+    if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
     const db = getDb();
     const category =
       (await db`INSERT INTO public.wms_categories (name) VALUES (${data.category || "Sem categoria"}) ON CONFLICT (name) DO UPDATE SET name = excluded.name RETURNING id::text`) as unknown as Array<{
@@ -263,6 +298,26 @@ export const wmsSaveProduct = createServerFn({ method: "POST" })
     });
   });
 
+export const wmsDeleteProduct = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const actor = await requireTab("catalogo");
+    if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
+    const db = getDb();
+    const rows =
+      (await db`UPDATE public.wms_products SET active=false, updated_at=now() WHERE id=${data.id}::uuid AND active=true RETURNING id::text, name, sku`) as unknown as Array<{
+        id: string;
+        name: string;
+        sku: string;
+      }>;
+    if (!rows[0]) throw new Error("Produto não encontrado ou já excluído.");
+    await audit(actor, "wms.product.delete", "wms_product", rows[0].id, {
+      name: rows[0].name,
+      sku: rows[0].sku,
+    });
+    return { ok: true, id: rows[0].id };
+  });
+
 export const wmsCreateSale = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
@@ -274,7 +329,7 @@ export const wmsCreateSale = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const actor = await requireRole(["admin_remote", "caixa_local"]);
+    const actor = await requireTab("balcao");
     const db = getDb();
     return db.begin(async (tx) => {
       const sale =
@@ -306,6 +361,65 @@ export const wmsCreateSale = createServerFn({ method: "POST" })
     });
   });
 
+export const wmsCreateCheckout = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      items: z
+        .array(z.object({ productId: z.string().uuid(), quantity: z.number().int().positive() }))
+        .min(1),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireTab("balcao");
+    const db = getDb();
+    const sale = await db.begin(async (tx) => {
+      const inserted =
+        (await tx`INSERT INTO public.wms_sales (operator_id, channel, payment_method, status) VALUES (${actor.id}, 'counter', 'infinitepay', 'pending') RETURNING id::text`) as unknown as Array<{
+          id: string;
+        }>;
+      let total = 0;
+      for (const item of data.items) {
+        const rows =
+          (await tx`SELECT id::text, name, sale_price_cents, cost_price_cents, stock_quantity FROM public.wms_products WHERE id=${item.productId}::uuid AND active=true FOR UPDATE`) as unknown as Array<{
+            id: string;
+            name: string;
+            sale_price_cents: number;
+            cost_price_cents: number;
+            stock_quantity: number;
+          }>;
+        const product = rows[0];
+        if (!product) throw new Error("Produto indisponível.");
+        if (product.stock_quantity < item.quantity)
+          throw new Error(`Estoque insuficiente: ${product.name}.`);
+        const line = Number(product.sale_price_cents) * item.quantity;
+        total += line;
+        await tx`INSERT INTO public.wms_sale_items (sale_id, product_id, quantity, unit_price_cents, unit_cost_snapshot_cents, total_cents) VALUES (${inserted[0].id}::uuid, ${product.id}::uuid, ${item.quantity}, ${product.sale_price_cents}, ${product.cost_price_cents}, ${line})`;
+      }
+      const orderNsu = `ALW-${inserted[0].id}`;
+      await tx`UPDATE public.wms_sales SET total_cents=${total}, payment_provider='infinitepay', payment_order_nsu=${orderNsu} WHERE id=${inserted[0].id}::uuid`;
+      await audit(actor, "wms.checkout.create", "wms_sale", inserted[0].id, { total, orderNsu });
+      return { id: inserted[0].id, orderNsu, total };
+    });
+    try {
+      const checkout = await createInfinitePayCheckout({
+        orderNsu: sale.orderNsu,
+        amountCents: sale.total,
+        description: `Compra Arena Leste ${sale.id}`,
+        expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      });
+      await db`UPDATE public.wms_sales SET payment_checkout_url=${checkout.checkoutUrl} WHERE id=${sale.id}::uuid`;
+      return {
+        ok: true,
+        saleId: sale.id,
+        totalCents: sale.total,
+        checkoutUrl: checkout.checkoutUrl,
+      };
+    } catch (error) {
+      await db`UPDATE public.wms_sales SET status='cancelled' WHERE id=${sale.id}::uuid AND status='pending'`;
+      throw error;
+    }
+  });
+
 export const wmsStockMovement = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
@@ -322,7 +436,8 @@ export const wmsStockMovement = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const actor = await requireRole(["admin_remote"]);
+    const actor = await requireTab("estoque");
+    if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
     const db = getDb();
     return db.begin(async (tx) => {
       const rows =
@@ -346,7 +461,8 @@ export const wmsStockMovement = createServerFn({ method: "POST" })
   });
 
 export const wmsAudit = createServerFn({ method: "GET" }).handler(async () => {
-  await requireRole(["admin_remote"]);
+  const actor = await requireTab("auditoria");
+  if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
   return getDb()`SELECT id::text, actor, action, entity, entity_id, details, created_at::text FROM public.audit_logs WHERE action LIKE 'wms.%' ORDER BY created_at DESC LIMIT 120`;
 });
 
@@ -360,7 +476,8 @@ export const wmsCreateUser = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    const actor = await requireRole(["admin_remote"]);
+    const actor = await requireTab("usuarios");
+    if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
     const db = getDb();
     const rows =
       (await db`INSERT INTO public.wms_users (username, display_name, password_hash, role) VALUES (${data.username}, ${data.displayName}, ${await sha256(data.password)}, ${data.role}) RETURNING id::text`) as unknown as Array<{
@@ -380,17 +497,22 @@ const wmsUserInput = z.object({
   password: z.string().min(8).max(200).optional(),
   role: z.enum(["admin_remote", "caixa_local"]),
   active: z.boolean().default(true),
+  permissions: z
+    .array(z.enum(["dashboard", "balcao", "catalogo", "estoque", "auditoria", "usuarios"]))
+    .default(["balcao"]),
 });
 
 export const wmsUsers = createServerFn({ method: "GET" }).handler(async () => {
-  await requireRole(["admin_remote"]);
-  return getDb()`SELECT id::text, username, display_name, role, active, created_at::text FROM public.wms_users ORDER BY CASE role WHEN 'admin_remote' THEN 0 ELSE 1 END, username`;
+  const actor = await requireTab("usuarios");
+  if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
+  return getDb()`SELECT id::text, username, display_name, role, active, tab_permissions, created_at::text FROM public.wms_users ORDER BY CASE role WHEN 'admin_remote' THEN 0 ELSE 1 END, username`;
 });
 
 export const wmsSaveUser = createServerFn({ method: "POST" })
   .inputValidator(wmsUserInput)
   .handler(async ({ data }) => {
-    const actor = await requireRole(["admin_remote"]);
+    const actor = await requireTab("usuarios");
+    if (actor.role !== "admin_remote") throw new Error("FORBIDDEN");
     const db = getDb();
     if (!data.id && !data.password) throw new Error("Informe uma senha inicial.");
     const username = data.username.toLowerCase();
@@ -399,12 +521,13 @@ export const wmsSaveUser = createServerFn({ method: "POST" })
       ? await db`
           UPDATE public.wms_users
           SET username=${username}, display_name=${data.displayName}, role=${data.role}, active=${data.active},
+              tab_permissions=${JSON.stringify(normalizeTabs(data.permissions, data.role))}::jsonb,
               password_hash=coalesce(${passwordHash}, password_hash)
           WHERE id=${data.id}::uuid RETURNING id::text
         `
       : await db`
-          INSERT INTO public.wms_users (username, display_name, password_hash, role, active)
-          VALUES (${username}, ${data.displayName}, ${passwordHash}, ${data.role}, ${data.active})
+          INSERT INTO public.wms_users (username, display_name, password_hash, role, active, tab_permissions)
+          VALUES (${username}, ${data.displayName}, ${passwordHash}, ${data.role}, ${data.active}, ${JSON.stringify(normalizeTabs(data.permissions, data.role))}::jsonb)
           RETURNING id::text
         `;
     const id = String((rows as unknown as Array<{ id: string }>)[0]?.id ?? data.id ?? "");
@@ -413,6 +536,7 @@ export const wmsSaveUser = createServerFn({ method: "POST" })
       displayName: data.displayName,
       role: data.role,
       active: data.active,
+      permissions: normalizeTabs(data.permissions, data.role),
       passwordChanged: Boolean(data.password),
     });
     return { ok: true, id };

@@ -82,7 +82,7 @@ function PaymentReturnPage() {
         {confirmed
           ? depositPaid
             ? `A InfinitePay confirmou a entrada de ${formatBRL(Number(result.chargedAmountCents))}. O saldo de ${formatBRL(Number(result.balanceDueCents))} continua pendente. Guarde o código ${result.code ?? search.order_nsu}.`
-            : `A InfinitePay confirmou o pagamento${result.kind === "tournament" ? " da inscrição" : " da reserva"}. Guarde o código ${result.code ?? search.order_nsu}.`
+            : `A InfinitePay confirmou o pagamento${result.kind === "tournament" ? " da inscrição" : result.kind === "wms" ? " da venda do PDV" : " da reserva"}. Guarde o código ${result.code ?? search.order_nsu}.`
           : review
             ? result.kind === "tournament"
               ? "A InfinitePay confirmou o pagamento, mas a equipe consta como cancelada. Fale com a Arena: o pagamento não reativa automaticamente a inscrição."
@@ -104,7 +104,11 @@ function PaymentReturnPage() {
           to={result?.kind === "tournament" ? "/torneio" : "/reservar"}
           className="inline-flex min-h-11 items-center rounded-full bg-primary px-5 font-bold text-primary-foreground"
         >
-          {result?.kind === "tournament" ? "Voltar ao torneio" : "Voltar às reservas"}
+          {result?.kind === "tournament"
+            ? "Voltar ao torneio"
+            : result?.kind === "wms"
+              ? "Voltar ao PDV"
+              : "Voltar às reservas"}
         </Link>
         <a
           href={waLink(message)}

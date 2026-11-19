@@ -23,7 +23,7 @@ type TournamentCheckoutRow = {
   payment_expires_at: string | null;
 };
 type OrderRow = {
-  kind: "booking" | "tournament";
+  kind: "booking" | "tournament" | "wms";
   code: string;
   expected_amount_cents: number;
   total_amount_cents: number;
@@ -33,7 +33,7 @@ type OrderRow = {
 
 export type PaymentProcessingResult = {
   status: "paid" | "review" | "processing" | "not_found";
-  kind?: "booking" | "tournament";
+  kind?: "booking" | "tournament" | "wms";
   code?: string;
   chargedAmountCents?: number;
   totalAmountCents?: number;
@@ -168,6 +168,19 @@ async function getOrder(orderNsu: string): Promise<OrderRow | null> {
     `) as unknown as OrderRow[];
     return rows[0] ?? null;
   }
+  if (orderNsu.startsWith("ALW-")) {
+    const rows = (await db`
+      SELECT 'wms'::text AS kind, id::text AS code,
+        total_cents::int AS expected_amount_cents,
+        total_cents::int AS total_amount_cents,
+        CASE WHEN status = 'completed' THEN 'paid' ELSE status END AS status,
+        false AS requires_review
+      FROM public.wms_sales
+      WHERE payment_provider = 'infinitepay' AND payment_order_nsu = ${orderNsu}
+      LIMIT 1
+    `) as unknown as OrderRow[];
+    return rows[0] ?? null;
+  }
   return null;
 }
 
@@ -219,6 +232,37 @@ export async function processInfinitePayPayment(
         RETURNING id
       `;
       if (!inserted.length) return order.requires_review ? ("review" as const) : ("paid" as const);
+    }
+
+    if (order.kind === "wms") {
+      const saleRows = (await tx`
+        SELECT id::text, status FROM public.wms_sales WHERE id=${order.code}::uuid FOR UPDATE
+      `) as unknown as Array<{ id: string; status: string }>;
+      if (!saleRows[0]) return "review" as const;
+      if (saleRows[0].status === "completed") return "paid" as const;
+      const items = (await tx`
+        SELECT i.product_id::text, i.quantity, p.name, p.stock_quantity
+        FROM public.wms_sale_items i
+        JOIN public.wms_products p ON p.id = i.product_id
+        WHERE i.sale_id=${order.code}::uuid
+        FOR UPDATE OF p
+      `) as unknown as Array<{
+        product_id: string;
+        quantity: number;
+        name: string;
+        stock_quantity: number;
+      }>;
+      for (const item of items) {
+        if (Number(item.stock_quantity) < Number(item.quantity)) return "review" as const;
+        await tx`UPDATE public.wms_products SET stock_quantity=stock_quantity-${item.quantity}, updated_at=now() WHERE id=${item.product_id}::uuid`;
+        await tx`INSERT INTO public.wms_stock_movements (product_id, movement_type, quantity, previous_quantity, new_quantity, reference_id, performed_by) VALUES (${item.product_id}::uuid, 'sale', ${-item.quantity}, ${item.stock_quantity}, ${Number(item.stock_quantity) - Number(item.quantity)}, ${order.code}::uuid, 'infinitepay')`;
+      }
+      await tx`UPDATE public.wms_sales SET status='completed', payment_transaction_nsu=${notice.transactionNsu}, payment_paid_at=${now}::timestamptz WHERE id=${order.code}::uuid`;
+      if (source === "webhook") {
+        await tx`UPDATE public.payment_webhook_events SET processed_at = ${now}::timestamptz WHERE provider = 'infinitepay' AND event_id = ${notice.eventId}`;
+      }
+      await tx`INSERT INTO public.audit_logs (actor, action, entity, entity_id, details) VALUES ('infinitepay', 'wms.sale.paid', 'wms_sale', ${order.code}, ${JSON.stringify({ orderNsu: notice.orderNsu, captureMethod: verification.captureMethod, source })}::jsonb)`;
+      return "paid" as const;
     }
 
     if (order.kind === "booking") {

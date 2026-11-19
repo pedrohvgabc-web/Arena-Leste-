@@ -946,6 +946,7 @@ function AdminUsers() {
                         role: user.role,
                         password: "",
                         active: user.active,
+                        permissions: user.tab_permissions ?? ["balcao"],
                       })
                     }
                   >
@@ -976,6 +977,7 @@ function AdminUsers() {
               password: "",
               role: "caixa_local",
               active: true,
+              permissions: ["balcao"],
             })
           }
         >
@@ -1027,6 +1029,38 @@ function AdminUsers() {
               />{" "}
               Acesso ativo
             </label>
+            <fieldset className="sm:col-span-2">
+              <legend className="text-sm font-semibold">Abas liberadas no WMS / PDV</legend>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {[
+                  ["dashboard", "Visão geral"],
+                  ["balcao", "Balcão / PDV"],
+                  ["catalogo", "Catálogo"],
+                  ["estoque", "Inventário"],
+                  ["auditoria", "Auditoria"],
+                  ["usuarios", "Usuários"],
+                ].map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(editingWms.permissions ?? []).includes(key)}
+                      onChange={(e) =>
+                        setEditingWms({
+                          ...editingWms,
+                          permissions: e.target.checked
+                            ? [...(editingWms.permissions ?? []), key]
+                            : (editingWms.permissions ?? []).filter((item: string) => item !== key),
+                        })
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
             <div className="flex gap-2 sm:justify-end">
               <button type="button" className="btn" onClick={() => setEditingWms(null)}>
                 Cancelar

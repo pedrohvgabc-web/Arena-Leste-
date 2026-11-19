@@ -26,6 +26,8 @@ import {
 import {
   wmsAuthCheck,
   wmsCreateSale,
+  wmsCreateCheckout,
+  wmsDeleteProduct,
   wmsDashboard,
   wmsLogin,
   wmsLogout,
@@ -35,10 +37,16 @@ import {
   wmsAudit,
   wmsUsers,
   wmsSaveUser,
+  type WmsTab,
 } from "@/lib/wms.functions";
 import { SITE } from "@/lib/site";
 
-type Actor = { id: string; name: string; role: "admin_remote" | "caixa_local" };
+type Actor = {
+  id: string;
+  name: string;
+  role: "admin_remote" | "caixa_local";
+  permissions: WmsTab[];
+};
 type Product = {
   id: string;
   name: string;
@@ -175,56 +183,63 @@ function WmsShell({ actor }: { actor: Actor }) {
   const fetchAudit = useServerFn(wmsAudit);
   const fetchUsers = useServerFn(wmsUsers);
   const qc = useQueryClient();
-  const [tab, setTab] = useState(actor.role === "caixa_local" ? "balcao" : "dashboard");
+  const [tab, setTab] = useState(
+    actor.permissions.includes("balcao") ? "balcao" : (actor.permissions[0] ?? "dashboard"),
+  );
   const [guideOpen, setGuideOpen] = useState(
     () =>
       actor.role === "admin_remote" &&
       typeof window !== "undefined" &&
       localStorage.getItem("arena-wms-guide-seen") !== "1",
   );
-  const tabs =
-    actor.role === "admin_remote"
-      ? [
-          ["dashboard", "Visão geral", ChartNoAxesCombined],
-          ["balcao", "Balcão / PDV", ShoppingCart],
-          ["catalogo", "Catálogo", Boxes],
-          ["estoque", "Inventário", PackagePlus],
-          ["auditoria", "Auditoria", ClipboardList],
-          ["usuarios", "Usuários", ShieldCheck],
-        ]
-      : [
-          ["balcao", "Balcão / PDV", ShoppingCart],
-          ["catalogo", "Produtos", Boxes],
-        ];
+  const tabs = [
+    ["dashboard", "Visão geral", ChartNoAxesCombined],
+    ["balcao", "Balcão / PDV", ShoppingCart],
+    ["catalogo", "Catálogo", Boxes],
+    ["estoque", "Inventário", PackagePlus],
+    ["auditoria", "Auditoria", ClipboardList],
+    ["usuarios", "Usuários", ShieldCheck],
+  ].filter(([id]) => actor.permissions.includes(id as WmsTab));
   useEffect(() => {
-    const requests = [
-      qc.prefetchQuery({
-        queryKey: ["wms-products"],
-        queryFn: () => fetchProducts(),
-        staleTime: 30_000,
-      }),
-    ];
-    if (actor.role === "admin_remote") {
+    const requests: Promise<unknown>[] = [];
+    if (
+      actor.permissions.some((permission) => ["balcao", "catalogo", "estoque"].includes(permission))
+    ) {
+      requests.push(
+        qc.prefetchQuery({
+          queryKey: ["wms-products"],
+          queryFn: () => fetchProducts(),
+          staleTime: 30_000,
+        }),
+      );
+    }
+    if (actor.permissions.includes("dashboard")) {
       requests.push(
         qc.prefetchQuery({
           queryKey: ["wms-dashboard"],
           queryFn: () => fetchDashboard(),
           staleTime: 30_000,
         }),
+      );
+    }
+    if (actor.permissions.includes("auditoria"))
+      requests.push(
         qc.prefetchQuery({
           queryKey: ["wms-audit"],
           queryFn: () => fetchAudit(),
           staleTime: 30_000,
         }),
+      );
+    if (actor.permissions.includes("usuarios"))
+      requests.push(
         qc.prefetchQuery({
           queryKey: ["wms-users"],
           queryFn: () => fetchUsers(),
           staleTime: 30_000,
         }),
       );
-    }
     void Promise.allSettled(requests);
-  }, [actor.role, fetchAudit, fetchDashboard, fetchProducts, fetchUsers, qc]);
+  }, [actor.permissions, fetchAudit, fetchDashboard, fetchProducts, fetchUsers, qc]);
   async function signOut() {
     await logout();
     await qc.invalidateQueries({ queryKey: ["wms-auth"] });
@@ -407,7 +422,7 @@ function Dashboard({ actor }: { actor: Actor }) {
   });
   const d = q.data as any;
   if (q.isLoading) return <Loading />;
-  if (q.error || !d) return <DataError onRetry={() => void q.refetch()} />;
+  if (q.error && !d) return <DataError onRetry={() => void q.refetch()} />;
   const cards = [
     ["Produtos ativos", d.products, Boxes],
     ["Abaixo do mínimo", d.lowStock, PackagePlus],
@@ -472,6 +487,7 @@ function Counter() {
     staleTime: 30_000,
   });
   const sale = useServerFn(wmsCreateSale);
+  const createCheckout = useServerFn(wmsCreateCheckout);
   const qc = useQueryClient();
   const [term, setTerm] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -503,6 +519,19 @@ function Counter() {
       toast.error(e instanceof Error ? e.message : "Não foi possível concluir.");
     }
   }
+  async function finishInfinitePay() {
+    if (!items.length) return toast.error("Bipe ou selecione um produto.");
+    try {
+      const result = await createCheckout({
+        data: { items: items.map((p) => ({ productId: p.id, quantity: cart[p.id] })) },
+      });
+      window.location.href = result.checkoutUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Não foi possível abrir a cobrança InfinitePay.",
+      );
+    }
+  }
   return (
     <section>
       <Title
@@ -520,7 +549,9 @@ function Counter() {
         }
       />
       {productsQ.isLoading && <Loading />}
-      {productsQ.error && <DataError onRetry={() => void productsQ.refetch()} />}
+      {productsQ.error && products.length === 0 && (
+        <DataError onRetry={() => void productsQ.refetch()} />
+      )}
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div>
           <label className="relative block">
@@ -591,13 +622,13 @@ function Counter() {
           </div>
           <div className="mt-4 grid grid-cols-3 gap-2">
             <button
-              onClick={() => finish("pix", "counter")}
+              onClick={() => void finishInfinitePay()}
               className="rounded-xl bg-primary px-2 py-3 text-xs font-bold text-primary-foreground"
             >
               Pix
             </button>
             <button
-              onClick={() => finish("card", "counter")}
+              onClick={() => void finishInfinitePay()}
               className="rounded-xl border border-white/15 px-2 py-3 text-xs font-bold"
             >
               Cartão
@@ -629,6 +660,7 @@ function Catalog({ actor }: { actor: Actor }) {
     staleTime: 30_000,
   });
   const save = useServerFn(wmsSaveProduct);
+  const deleteProduct = useServerFn(wmsDeleteProduct);
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<Product> | null>(null);
   const products = (q.data ?? []) as Product[];
@@ -664,6 +696,18 @@ function Catalog({ actor }: { actor: Actor }) {
       await qc.refetchQueries({ queryKey: ["wms-products"], type: "active" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar.");
+    }
+  }
+  async function removeProduct(product: Product) {
+    if (!window.confirm(`Excluir ${product.name} do catálogo? Ele deixará de aparecer no PDV.`))
+      return;
+    try {
+      await deleteProduct({ data: { id: product.id } });
+      toast.success("Produto excluído do catálogo.");
+      await qc.invalidateQueries({ queryKey: ["wms-products"] });
+      await qc.refetchQueries({ queryKey: ["wms-products"], type: "active" });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível excluir o produto.");
     }
   }
   return (
@@ -703,7 +747,7 @@ function Catalog({ actor }: { actor: Actor }) {
         <ProductForm value={editing} onClose={() => setEditing(null)} onSave={saveProduct} />
       )}
       {q.isLoading && <Loading />}
-      {q.error && (
+      {q.error && products.length === 0 && (
         <div className="rounded-2xl border border-red-300/30 bg-red-950/20 p-5 text-sm text-red-100">
           Não foi possível carregar os produtos.{" "}
           {q.error instanceof Error ? q.error.message : "Atualize a página e tente novamente."}
@@ -786,6 +830,13 @@ function Catalog({ actor }: { actor: Actor }) {
                           onClick={() => setEditing(p)}
                         >
                           Editar
+                        </button>
+                        <button
+                          type="button"
+                          className="ml-3 font-semibold text-red-300 hover:underline"
+                          onClick={() => void removeProduct(p)}
+                        >
+                          Excluir
                         </button>
                       </td>
                     </>
@@ -1010,7 +1061,7 @@ function Audit() {
       />
       {q.isLoading ? (
         <Loading />
-      ) : q.error ? (
+      ) : q.error && !q.data ? (
         <DataError onRetry={() => void q.refetch()} />
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#211a23]">
