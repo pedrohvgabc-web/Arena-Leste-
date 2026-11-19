@@ -180,6 +180,12 @@ function Reservar() {
   const [paymentPlan, setPaymentPlan] = useState<PaymentPlan>("full");
   const [paymentPlanLocked, setPaymentPlanLocked] = useState(false);
   const [pendingDraft, setPendingDraft] = useState<BookingDraft | null>(null);
+  const [paymentSnapshot, setPaymentSnapshot] = useState<{
+    durationMinutes: number;
+    totalCents: number;
+    chargeCents: number;
+    balanceDueCents: number;
+  } | null>(null);
   const paymentDialogRef = useRef<HTMLDialogElement>(null);
   const [promoDialogOpen, setPromoDialogOpen] = useState(false);
   const [promoReady, setPromoReady] = useState(false);
@@ -337,6 +343,14 @@ function Reservar() {
   const totalCents = pricing?.totalCents ?? 0;
   const chargeCents = initialPaymentCents(totalCents, paymentPlan);
   const balanceDueCents = Math.max(0, totalCents - chargeCents);
+  const paymentDuration = paymentSnapshot?.durationMinutes ?? selectedDurationMinutes;
+  const paymentTotal = paymentSnapshot?.totalCents ?? totalCents;
+  const paymentCharge = paymentSnapshot
+    ? initialPaymentCents(paymentTotal, paymentPlan)
+    : chargeCents;
+  const paymentBalance = paymentSnapshot
+    ? Math.max(0, paymentTotal - paymentCharge)
+    : balanceDueCents;
   const releasedOfferUnavailable =
     Boolean(search.offer && !releasedOffer) ||
     Boolean(
@@ -446,6 +460,12 @@ function Reservar() {
     if (paymentMethod === "pix" && paymentMode === "infinitepay") {
       setPaymentPlan("full");
       setPaymentPlanLocked(false);
+      setPaymentSnapshot({
+        durationMinutes: selectedDurationMinutes,
+        totalCents,
+        chargeCents: totalCents,
+        balanceDueCents: 0,
+      });
       setPaymentDialogOpen(true);
       return;
     }
@@ -555,6 +575,7 @@ function Reservar() {
     setPaymentPlan("full");
     setPaymentPlanLocked(false);
     setPendingDraft(null);
+    setPaymentSnapshot(null);
     setPaymentDialogOpen(false);
     setCancellationDialogOpen(false);
     setBookingStep(1);
@@ -1165,8 +1186,8 @@ function Reservar() {
           </div>
           <h2 id="booking-payment-title">Como prefere pagar?</h2>
           <p className="booking-payment-dialog__intro">
-            {formatDuration(selectedDurationMinutes)} · Total da reserva:{" "}
-            <strong>{formatBRL(totalCents)}</strong>
+            {formatDuration(paymentDuration)} · Total da reserva:{" "}
+            <strong>{formatBRL(paymentTotal)}</strong>
           </p>
           <fieldset className="booking-payment-choices" disabled={busy || paymentPlanLocked}>
             <legend className="sr-only">Escolha quanto pagar agora</legend>
@@ -1180,10 +1201,10 @@ function Reservar() {
               />
               <span>
                 <strong>Entrada · 30%</strong>
-                <b>{formatBRL(initialPaymentCents(totalCents, "deposit_30"))}</b>
+                <b>{formatBRL(initialPaymentCents(paymentTotal, "deposit_30"))}</b>
                 <small>
                   Saldo após a entrada:{" "}
-                  {formatBRL(totalCents - initialPaymentCents(totalCents, "deposit_30"))}
+                  {formatBRL(paymentTotal - initialPaymentCents(paymentTotal, "deposit_30"))}
                 </small>
               </span>
             </label>
@@ -1197,15 +1218,15 @@ function Reservar() {
               />
               <span>
                 <strong>Pagar valor integral</strong>
-                <b>{formatBRL(totalCents)}</b>
+                <b>{formatBRL(paymentTotal)}</b>
                 <small>Quita o total da reserva nesta cobrança.</small>
               </span>
             </label>
           </fieldset>
           <p className="booking-payment-dialog__note">
-            A cobrança de {formatBRL(chargeCents)} será gerada pela InfinitePay.
-            {balanceDueCents > 0
-              ? ` O saldo de ${formatBRL(balanceDueCents)} não será incluído nesta cobrança inicial.`
+            A cobrança de {formatBRL(paymentCharge)} será gerada pela InfinitePay.
+            {paymentBalance > 0
+              ? ` O saldo de ${formatBRL(paymentBalance)} não será incluído nesta cobrança inicial.`
               : " Esta opção paga o total informado."}
           </p>
           {paymentPlanLocked && (
@@ -1239,7 +1260,7 @@ function Reservar() {
                   <LoaderCircle size={17} className="loading-icon" /> Preparando checkout…
                 </>
               ) : (
-                `Seguir para pagamento · ${formatBRL(chargeCents)}`
+                `Seguir para pagamento · ${formatBRL(paymentCharge)}`
               )}
             </button>
           </div>

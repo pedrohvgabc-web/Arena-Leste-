@@ -64,8 +64,17 @@ async function postJson(url: string, body: Record<string, unknown>) {
   } catch {
     throw new Error("INFINITEPAY_NETWORK_ERROR");
   }
-  if (!response.ok) throw new Error("INFINITEPAY_REQUEST_FAILED");
   const result: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const providerMessage = isRecord(result)
+      ? String(result["message"] ?? result["error"] ?? result["code"] ?? "").slice(0, 120)
+      : "";
+    throw new Error(
+      providerMessage
+        ? `INFINITEPAY_REQUEST_FAILED:${providerMessage}`
+        : "INFINITEPAY_REQUEST_FAILED",
+    );
+  }
   if (!isRecord(result)) throw new Error("INFINITEPAY_INVALID_RESPONSE");
   return result;
 }

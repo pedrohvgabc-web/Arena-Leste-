@@ -511,7 +511,11 @@ export const createBooking = createServerFn({ method: "POST" })
       if (data.method === "pix" && paymentMode === "infinitepay") {
         try {
           await (await import("./payment-processing.server")).ensureBookingCheckout(previousCode);
-        } catch {
+        } catch (error) {
+          console.error("InfinitePay retry checkout failed", {
+            groupCode: previousCode,
+            error: error instanceof Error ? error.message.slice(0, 180) : "UNKNOWN_ERROR",
+          });
           return {
             ok: false as const,
             error:
@@ -735,7 +739,11 @@ export const createBooking = createServerFn({ method: "POST" })
           await (
             await import("./payment-processing.server")
           ).ensureBookingCheckout(String(outcome.code));
-        } catch {
+        } catch (error) {
+          console.error("InfinitePay checkout failed", {
+            groupCode: String(outcome.code),
+            error: error instanceof Error ? error.message.slice(0, 180) : "UNKNOWN_ERROR",
+          });
           return {
             ok: false as const,
             error:
