@@ -1340,8 +1340,50 @@
   }
 }
 
-
 /* WMS / PDV */
-.input { width: 100%; border-radius: 0.75rem; border: 1px solid rgb(255 255 255 / 0.1); background: rgb(0 0 0 / 0.2); padding: 0.75rem 0.875rem; color: #fff8f1; outline: none; }
-.input:focus { border-color: var(--primary); }
-.input option { background: #211a23; color: #fff8f1; }
+.input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  background: rgb(0 0 0 / 0.2);
+  padding: 0.75rem 0.875rem;
+  color: #fff8f1;
+  outline: none;
+}
+.input:focus {
+  border-color: var(--primary);
+}
+.input option {
+  background: #211a23;
+  color: #fff8f1;
+}
+
+/* Tema claro oficial da Arena Leste, inclusive para o WMS/PDV. */
+[data-theme="light"] {
+  color-scheme: light;
+}
+[data-theme="light"] .wms-light {
+  background: #fff9f2 !important;
+  color: #1a1210 !important;
+}
+[data-theme="light"] .wms-light [class*="bg-[#211a23]"],
+[data-theme="light"] .wms-light [class*="bg-[#171219]"] {
+  background-color: #ffffff !important;
+  color: #1a1210 !important;
+}
+[data-theme="light"] .wms-light [class*="bg-black"] {
+  background-color: #f4ede6 !important;
+}
+[data-theme="light"] .wms-light [class*="border-white"] {
+  border-color: #e2d8ce !important;
+}
+[data-theme="light"] .wms-light [class*="text-white"] {
+  color: #6b5f57 !important;
+}
+[data-theme="light"] .wms-light .text-primary {
+  color: #ad4306 !important;
+}
+[data-theme="light"] .wms-light header {
+  background-color: rgb(255 249 242 / 0.95) !important;
+  border-color: #e2d8ce !important;
+}

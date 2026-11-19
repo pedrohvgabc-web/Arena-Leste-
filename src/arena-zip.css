@@ -40,6 +40,15 @@
   --ac: #ff6a1f;
   --sand: #ff6a1f;
 }
+:root[data-theme="light"] {
+  --bg: #fffaf5;
+  --sf: #ffffff;
+  --tx: #1a1210;
+  --mu: #6b5f57;
+  --bd: rgb(26 18 16 / 0.14);
+  --ac: #df4f07;
+  --sand: #df4f07;
+}
 *,
 *::before,
 *::after {

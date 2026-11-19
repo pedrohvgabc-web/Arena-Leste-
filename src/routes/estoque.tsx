@@ -93,7 +93,7 @@ function WmsPage() {
 }
 function ScreenMessage({ text }: { text: string }) {
   return (
-    <div className="grid min-h-screen place-items-center bg-[#171219] font-display text-2xl font-bold uppercase text-primary">
+    <div className="wms-light grid min-h-screen place-items-center bg-[#171219] font-display text-2xl font-bold uppercase text-primary">
       {text}
     </div>
   );
@@ -131,7 +131,7 @@ function Login() {
     }
   }
   return (
-    <main className="min-h-screen bg-[#171219] px-4 py-10 text-[#fff8f1]">
+    <main className="wms-light min-h-screen bg-[#171219] px-4 py-10 text-[#fff8f1]">
       <div className="mx-auto max-w-md rounded-[2rem] border border-white/10 bg-[#211a23] p-7 shadow-2xl">
         <p className="font-mono text-xs font-bold uppercase tracking-[.18em] text-primary">
           Arena Leste · WMS / PDV
@@ -245,7 +245,7 @@ function WmsShell({ actor }: { actor: Actor }) {
     await qc.invalidateQueries({ queryKey: ["wms-auth"] });
   }
   return (
-    <div className="min-h-screen bg-[#171219] text-[#fff8f1]">
+    <div className="wms-light min-h-screen bg-[#171219] text-[#fff8f1]">
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#171219]/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-3 lg:px-8">
           <div>
