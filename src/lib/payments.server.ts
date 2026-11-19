@@ -20,7 +20,7 @@ export type InfinitePayVerification = {
   captureMethod: "pix" | "credit_card" | null;
 };
 
-type InfinitePayCredentials = { apiKey: string; handle: string };
+type InfinitePayCredentials = { apiKey: string };
 
 const API_BASE = "https://api.checkout.infinitepay.io";
 
@@ -28,23 +28,15 @@ const API_BASE = "https://api.checkout.infinitepay.io";
 export function getPaymentMode(): PaymentMode {
   if (process.env["INFINITEPAY_ENABLED"] !== "true") return "demo";
   const apiKey = process.env["INFINITEPAY_API_KEY"]?.trim() ?? "";
-  const handle = process.env["INFINITEPAY_HANDLE"]?.trim().replace(/^\$/, "") ?? "";
-  return /^inchk_[A-Za-z0-9_-]{16,}$/.test(apiKey) && /^[A-Za-z0-9._-]{2,80}$/.test(handle)
-    ? "infinitepay"
-    : "unavailable";
+  return /^inchk_[A-Za-z0-9_-]{16,}$/.test(apiKey) ? "infinitepay" : "unavailable";
 }
 
 function credentials(): InfinitePayCredentials {
   const apiKey = process.env["INFINITEPAY_API_KEY"]?.trim() ?? "";
-  const handle = process.env["INFINITEPAY_HANDLE"]?.trim().replace(/^\$/, "") ?? "";
-  if (
-    getPaymentMode() !== "infinitepay" ||
-    !/^inchk_[A-Za-z0-9_-]{16,}$/.test(apiKey) ||
-    !/^[A-Za-z0-9._-]{2,80}$/.test(handle)
-  ) {
+  if (getPaymentMode() !== "infinitepay" || !/^inchk_[A-Za-z0-9_-]{16,}$/.test(apiKey)) {
     throw new Error("INFINITEPAY_NOT_CONFIGURED");
   }
-  return { apiKey, handle };
+  return { apiKey };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,9 +85,8 @@ export async function createInfinitePayCheckout(input: {
   if (!Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= Date.now()) {
     throw new Error("INFINITEPAY_INVALID_EXPIRATION");
   }
-  const { handle } = credentials();
+  credentials();
   const payload: Record<string, unknown> = {
-    handle,
     items: [
       {
         description: input.description.slice(0, 120),
@@ -153,9 +144,8 @@ export async function verifyInfinitePayPayment(input: {
   slug: string;
   expectedAmountCents: number;
 }): Promise<InfinitePayVerification> {
-  const { handle } = credentials();
+  credentials();
   const result = await postJson(`${API_BASE}/payment_check`, {
-    handle,
     order_nsu: input.orderNsu,
     transaction_nsu: input.transactionNsu,
     slug: input.slug,

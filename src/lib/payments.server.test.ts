@@ -59,6 +59,7 @@ describe("InfinitePay server checkout", () => {
     expect(String(url)).toBe("https://api.checkout.infinitepay.io/links");
     expect(new Headers(init?.headers).get("X-Api-Key")).toBe("inchk_TEST_ONLY_0000000000000000");
     const payload = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("handle");
     expect(payload["items"]).toEqual([
       { description: "Reserva Arena Leste AL-TESTE12", price: 10_000, quantity: 1 },
     ]);
