@@ -5,6 +5,7 @@
     { "path": "/pagamento/retorno", "title": "Retorno do pagamento" },
     { "path": "/torneio", "title": "Torneio Novembro Azul" },
     { "path": "/fotos", "title": "Fotos do evento — Arena Leste" },
+    { "path": "/estoque", "title": "Estoque & PDV — Arena Leste" },
     { "path": "/admin", "title": "Administração Arena Leste" },
     { "path": "/privacidade", "title": "Privacidade" },
     { "path": "/termos", "title": "Termos de uso" },
