@@ -661,12 +661,15 @@ footer a:hover {
 }
 .wpp-option {
   display: grid;
-  gap: 0.2rem;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.7rem;
+  row-gap: 0.2rem;
   padding: 0.85rem 1rem;
-  border: 1px solid rgb(246 240 234/0.16);
+  border: 2px solid #128c45 !important;
   border-radius: 1rem;
-  background: rgb(20 13 10/0.94);
-  color: var(--tx);
+  background: #25d366 !important;
+  color: #082b17 !important;
   text-decoration: none;
   box-shadow: 0 10px 28px rgb(0 0 0/0.24);
   transform: translateY(0.4rem);
@@ -674,6 +677,27 @@ footer a:hover {
     transform 220ms var(--eo),
     border-color 220ms var(--eo),
     background-color 220ms var(--eo);
+}
+.wpp-option__icon {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  width: 1.4rem;
+  height: 1.4rem;
+  color: #082b17 !important;
+}
+.wpp-option > span,
+.wpp-option > small {
+  grid-column: 2;
+  color: #082b17 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+.wpp-option > span {
+  font-weight: 800;
+}
+.wpp-option > small {
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 .wpp-menu.is-open .wpp-option {
   transform: translateY(0);
@@ -683,9 +707,12 @@ footer a:hover {
 }
 .wpp-option:hover,
 .wpp-option:focus-visible {
-  border-color: var(--tx);
-  background: rgb(223 79 7/0.2);
-  outline: none;
+  border-color: #075a2a !important;
+  background: #54e27f !important;
+}
+.wpp-option:focus-visible {
+  outline: 3px solid #082b17;
+  outline-offset: 3px;
 }
 @media (hover: hover) and (pointer: fine) {
   .wpp:hover {

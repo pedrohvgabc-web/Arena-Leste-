@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
+import { MessageCircle } from "lucide-react";
 import { LazyLoopVideo } from "@/components/LazyLoopVideo";
 import { GravaiSection } from "@/components/GravaiSection";
 import { PhotoCtaSection } from "@/components/PhotoCtaSection";
@@ -501,6 +502,7 @@ function HomePage() {
             rel="noopener noreferrer"
             tabIndex={whatsappOpen ? 0 : -1}
           >
+            <MessageCircle className="wpp-option__icon" aria-hidden="true" />
             <span>Grupo Arena Leste</span>
             <small>Entrar na comunidade ↗</small>
           </a>
@@ -511,6 +513,7 @@ function HomePage() {
             rel="noopener noreferrer"
             tabIndex={whatsappOpen ? 0 : -1}
           >
+            <MessageCircle className="wpp-option__icon" aria-hidden="true" />
             <span>Tirar dúvidas</span>
             <small>{SITE.phoneDisplay} ↗</small>
           </a>
