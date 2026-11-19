@@ -2913,6 +2913,12 @@ tr:last-child td {
   color: var(--tx);
   font-weight: 850;
 }
+.booking-promo-summary__note {
+  margin-top: 0.28rem !important;
+  color: var(--tx) !important;
+  font-size: 0.82rem !important;
+  font-weight: 750;
+}
 .booking-promo-summary__button {
   min-height: 2.7rem;
   padding: 0.6rem 0.85rem;
@@ -3003,6 +3009,15 @@ tr:last-child td {
   color: var(--mu);
   font-size: 0.72rem;
   line-height: 1.3;
+}
+.booking-promo-dialog__two-hour-note {
+  max-width: none !important;
+  margin: 0.7rem 0 0 !important;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgb(223 79 7 / 0.18);
+  color: var(--tx) !important;
+  font-size: 0.82rem !important;
+  font-weight: 750;
 }
 .booking-promo-dialog__day + .booking-promo-dialog__day {
   margin-top: 0.75rem;

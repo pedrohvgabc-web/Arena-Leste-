@@ -205,6 +205,22 @@ describe("preço normal e promoção de reservas", () => {
     });
   });
 
+  it("cobra R$90 por duas horas nas faixas 19–21 e 21–23 de quinta a sábado no Pix ou dinheiro", () => {
+    expect(
+      calculateBookingPrice(5_000, 60, 2, "2026-11-19", "pix", 120, ["19:00", "20:00"]),
+    ).toEqual({ perSlotCents: 4_500, totalCents: 9_000, promoApplied: true });
+    expect(
+      calculateBookingPrice(5_000, 60, 2, "2026-11-21", "cash_onsite", 120, ["21:00", "22:00"]),
+    ).toEqual({ perSlotCents: 4_500, totalCents: 9_000, promoApplied: true });
+    expect(
+      calculateBookingPrice(5_000, 60, 2, "2026-11-19", "pix", 120, ["18:00", "19:00"]).totalCents,
+    ).toBe(10_000);
+    expect(
+      calculateBookingPrice(5_000, 60, 2, "2026-11-19", "card_onsite", 120, ["19:00", "20:00"])
+        .totalCents,
+    ).toBe(10_000);
+  });
+
   it("não dá desconto a dois slots de 30 min que somam exatamente uma hora", () => {
     expect(calculateBookingPrice(3_000, 30, 2)).toEqual({
       perSlotCents: 3_000,

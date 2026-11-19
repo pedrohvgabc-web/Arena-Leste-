@@ -331,6 +331,7 @@ function Reservar() {
         date ?? undefined,
         paymentMethod,
         selectedDurationMinutes,
+        selectedSlots.map((slot) => slot.start),
       )
     : null;
   const maxSelectableSlots = Math.min(
@@ -344,6 +345,8 @@ function Reservar() {
     date ?? undefined,
     paymentMethod,
     selectedDurationMinutes,
+    selectedSlots.map((slot) => slot.start),
+    selectedSpace?.slot_minutes ?? 60,
   );
   const promoAvailable = promoRate !== null;
   const promoHourlyRateCents = promoRate ?? regularHourlyRateCents;
@@ -819,6 +822,10 @@ function Reservar() {
                     <p>
                       Reserve mais de 2 horas e pague <strong>R$ 40/h de domingo a quarta</strong>{" "}
                       ou <strong>R$ 45/h de quinta a sábado</strong>, no Pix ou dinheiro.
+                    </p>
+                    <p className="booking-promo-summary__note">
+                      Para exatamente 2h: quinta a sábado, 19h–21h ou 21h–23h por R$ 90 no Pix ou
+                      dinheiro.
                     </p>
                   </div>
                   <button
@@ -1358,6 +1365,9 @@ function Reservar() {
                 <small>10% abaixo da tarifa normal de R$ 50/h</small>
               </div>
             </div>
+            <p className="booking-promo-dialog__two-hour-note">
+              Exatamente 2h: quinta a sábado, 19h–21h ou 21h–23h por R$ 90 no Pix ou dinheiro.
+            </p>
           </section>
           <section
             className="booking-promo-dialog__windows"
@@ -1394,11 +1404,11 @@ function Reservar() {
                 </span>
                 <span>
                   <small>19h–21h</small>
-                  <b>R$ 100</b>
+                  <b>R$ 90</b>
                 </span>
                 <span>
                   <small>21h–23h</small>
-                  <b>R$ 100</b>
+                  <b>R$ 90</b>
                 </span>
                 <span>
                   <small>23h–0h</small>

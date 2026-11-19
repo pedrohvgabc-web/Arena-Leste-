@@ -674,6 +674,7 @@ export const createBooking = createServerFn({ method: "POST" })
           data.date,
           data.method,
           totalDurationMinutes,
+          slots.map((slot) => slot.start),
         );
         if (!Number.isSafeInteger(pricing.totalCents) || pricing.totalCents <= 0) {
           return { code: null, error: "Não foi possível calcular o valor desta reserva." };
@@ -855,6 +856,7 @@ async function getPublicBooking(code: string) {
     String(first.booking_date),
     first.payment_method as "pix" | "card_onsite" | "cash_onsite",
     durationMinutesOfSlots(bookingSlots),
+    bookingSlots.map((slot) => slot.start),
   );
   const paymentPlan: PaymentPlan = balanceDue > 0 ? "deposit_30" : "full";
   return {

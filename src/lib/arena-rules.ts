@@ -234,10 +234,27 @@ export function promotionalHourlyRateCents(
   dateISO: string | undefined,
   method: PaymentMethod | undefined,
   durationMinutes: number,
+  slotStarts?: string[],
+  slotMinutes = 60,
 ) {
   if (!dateISO || !method || !["pix", "cash_onsite"].includes(method)) return null;
-  if (durationMinutes <= 2 * 60) return null;
   const weekday = weekdayOf(dateISO);
+  if (
+    durationMinutes === 2 * 60 &&
+    weekday >= 4 &&
+    weekday <= 6 &&
+    Number.isInteger(slotMinutes) &&
+    slotMinutes > 0 &&
+    120 % slotMinutes === 0 &&
+    slotStarts?.length === 120 / slotMinutes
+  ) {
+    const starts = slotStarts.map(toMin).sort((a, b) => a - b);
+    const includesPromoWindow = [19 * 60, 21 * 60].some((windowStart) =>
+      starts.every((start, index) => start === windowStart + index * slotMinutes),
+    );
+    if (includesPromoWindow) return THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR;
+  }
+  if (durationMinutes <= 2 * 60) return null;
   return weekday >= 0 && weekday <= 3
     ? WEEKDAY_PROMO_RATE_CENTS_PER_HOUR
     : THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR;
@@ -250,6 +267,7 @@ export function calculateBookingPrice(
   dateISO?: string,
   method?: PaymentMethod,
   durationMinutesOverride?: number,
+  slotStarts?: string[],
 ) {
   const quantity = Math.max(0, Math.floor(count));
   const regularPrice = Number.isFinite(priceCents) ? Math.max(0, Math.round(priceCents)) : 0;
@@ -257,7 +275,13 @@ export function calculateBookingPrice(
   if (!quantity || !validDuration) return { perSlotCents: 0, totalCents: 0, promoApplied: false };
 
   const totalDurationMinutes = durationMinutesOverride ?? quantity * slotMinutes;
-  const arenaPromoRate = promotionalHourlyRateCents(dateISO, method, totalDurationMinutes);
+  const arenaPromoRate = promotionalHourlyRateCents(
+    dateISO,
+    method,
+    totalDurationMinutes,
+    slotStarts,
+    slotMinutes,
+  );
   const promoApplied = arenaPromoRate !== null;
   const totalCents =
     arenaPromoRate !== null
