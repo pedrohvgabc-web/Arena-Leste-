@@ -1,14 +1,14 @@
 {
   "routes": [
-    { "path": "/", "title": "Arena Leste Multi Sports" },
-    { "path": "/reservar", "title": "Agendar por unidade" },
-    { "path": "/pagamento/retorno", "title": "Retorno do pagamento" },
-    { "path": "/torneio", "title": "Torneio Novembro Azul" },
-    { "path": "/fotos", "title": "Fotos do evento — Arena Leste" },
-    { "path": "/estoque", "title": "Estoque & PDV — Arena Leste" },
-    { "path": "/admin", "title": "Administração Arena Leste" },
-    { "path": "/privacidade", "title": "Privacidade" },
-    { "path": "/termos", "title": "Termos de uso" },
-    { "path": "/cancelamento", "title": "Cancelamentos" }
+    { "path": "/", "title": "Arena Leste Multi Sports — Vôlei de praia em Porto Velho" },
+    { "path": "/reservar", "title": "Agendamento de quadras — Arena Leste Porto Velho" },
+    { "path": "/pagamento/retorno", "title": "Retorno de pagamento — Arena Leste Multi Sports" },
+    { "path": "/torneio", "title": "Torneio Novembro Azul — Arena Leste Multi Sports" },
+    { "path": "/fotos", "title": "Galeria de fotos do Torneio Novembro Azul — Arena Leste" },
+    { "path": "/estoque", "title": "Estoque & PDV — Arena Leste Multi Sports" },
+    { "path": "/admin", "title": "Painel — Arena Leste Multi Sports" },
+    { "path": "/privacidade", "title": "Política de Privacidade — Arena Leste Multi Sports" },
+    { "path": "/termos", "title": "Termos de Uso — Arena Leste Multi Sports" },
+    { "path": "/cancelamento", "title": "Política de Cancelamento — Arena Leste Multi Sports" }
   ]
 }

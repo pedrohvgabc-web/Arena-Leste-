@@ -9,7 +9,7 @@ import { getPublicGalleryPhotos, type PhotoGalleryPhoto } from "@/lib/gallery.fu
 export const Route = createFileRoute("/fotos")({
   head: () => ({
     meta: [
-      { title: "Fotos do evento — Arena Leste" },
+      { title: "Galeria de fotos do Torneio Novembro Azul — Arena Leste" },
       { name: "description", content: "Encontre e baixe sua foto do Torneio Novembro Azul." },
     ],
   }),

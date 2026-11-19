@@ -139,13 +139,13 @@ export const Route = createFileRoute("/reservar")({
   }),
   head: () => ({
     meta: [
-      { title: "Agendar — Arena Leste Multi Sports" },
+      { title: "Agendamento de quadras — Arena Leste Porto Velho" },
       {
         name: "description",
         content:
           "Escolha a unidade, quadra, dia e horário para reservar na Arena Leste em Porto Velho.",
       },
-      { property: "og:title", content: "Agende sua quadra — Arena Leste" },
+      { property: "og:title", content: "Agendamento de quadras — Arena Leste Porto Velho" },
       {
         property: "og:description",
         content: "Agendamento online para as quadras de areia das duas unidades.",
@@ -652,12 +652,12 @@ function Reservar() {
             className="booking-promo"
             aria-haspopup="dialog"
             aria-expanded={promoDialogOpen}
-            aria-label="Aperte para liberar sua PROMOÇÃO"
+            aria-label="Ver a promoção e as tarifas da Arena Leste"
             onClick={() => setPromoDialogOpen(true)}
           >
-            <strong>LIBERE SUA</strong>
+            <strong>VER A</strong>
             <span>PROMOÇÃO</span>
-            <small>TOQUE AQUI</small>
+            <small>TARIFAS</small>
           </button>
         )}
 
@@ -802,6 +802,37 @@ function Reservar() {
                   <p className="hint">Nenhum dia aberto está configurado para esta unidade.</p>
                 )}
               </fieldset>
+
+              <aside
+                className="booking-promo-summary"
+                aria-labelledby="booking-promo-summary-title"
+              >
+                <div className="booking-promo-summary__inner">
+                  <div className="booking-promo-summary__icon" aria-hidden="true">
+                    <Ticket size={21} />
+                  </div>
+                  <div className="booking-promo-summary__copy">
+                    <span className="booking-promo-summary__eyebrow">VANTAGEM ARENA LESTE</span>
+                    <h3 id="booking-promo-summary-title">
+                      Não perca essa oportunidade: aproveite a promoção!
+                    </h3>
+                    <p>
+                      Reserve mais de 2 horas e pague <strong>R$ 40/h de domingo a quarta</strong>{" "}
+                      ou <strong>R$ 45/h de quinta a sábado</strong>, no Pix ou dinheiro.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="booking-promo-summary__button"
+                    onClick={() => setPromoDialogOpen(true)}
+                    aria-haspopup="dialog"
+                    aria-controls="booking-promo-dialog"
+                    aria-expanded={promoDialogOpen}
+                  >
+                    Ver faixas e regras
+                  </button>
+                </div>
+              </aside>
 
               <div className="booking-hours-row">
                 <fieldset
@@ -1277,6 +1308,7 @@ function Reservar() {
         </dialog>
         <dialog
           ref={promoDialogRef}
+          id="booking-promo-dialog"
           className="booking-promo-dialog"
           aria-labelledby="booking-promo-title"
           aria-describedby="booking-promo-description"
@@ -1299,25 +1331,82 @@ function Reservar() {
             <X size={19} aria-hidden="true" />
           </button>
           <span className="booking-promo-dialog__stamp" aria-hidden="true">
-            {promoAvailable ? `${formatBRL(promoHourlyRateCents)} / hora` : "TARIFA DA QUADRA"}
+            {promoAvailable ? `${formatBRL(promoHourlyRateCents)}/h` : "ATÉ R$ 45/H"}
           </span>
-          <span className="mono">ARENA LESTE · VANTAGEM DESBLOQUEADA</span>
-          <h2 id="booking-promo-title">{promoAvailable ? "PROMOÇÃO LIBERADA" : "MENOR TARIFA"}</h2>
+          <span className="mono">ARENA LESTE · PROMOÇÃO DE RESERVA</span>
+          <h2 id="booking-promo-title">
+            {promoAvailable ? "SUA PROMOÇÃO ESTÁ ATIVA" : "COMO APROVEITAR"}
+          </h2>
           <p id="booking-promo-description" className="booking-promo-dialog__lead">
             {promoAvailable
-              ? `ATIVA: ${formatBRL(promoHourlyRateCents)}/h no ${paymentMethod === "pix" ? "Pix" : "dinheiro"}.`
-              : "Alugue mais de 2 horas no Pix ou dinheiro para ativar."}
+              ? `Boa! Sua seleção ativou ${formatBRL(promoHourlyRateCents)} por hora no ${paymentMethod === "pix" ? "Pix" : "dinheiro"}.`
+              : "Reserve mais de 2 horas e escolha Pix ou dinheiro para pagar menos."}
           </p>
-          <ul className="booking-promo-dialog__rules">
-            <li>
-              <b>Dom–Qua:</b> 18–19 R$40 · 19–21 R$80 · 21–23 R$80 · 23–00 R$40
-            </li>
-            <li>
-              <b>Qui–Sáb:</b> 18–19 R$50 · 19–21 R$100 · 21–23 R$100 · 23–00 R$50
-            </li>
-            <li>Acima de 2 horas no Pix ou dinheiro: R$40/h Dom–Qua ou R$45/h Qui–Sáb.</li>
-            <li>R$45/h representa 10% de desconto sobre a tarifa normal de R$50/h.</li>
-          </ul>
+          <section
+            className="booking-promo-dialog__offer"
+            aria-label="Tarifa promocional por duração"
+          >
+            <h3>Mais de 2 horas · Pix ou dinheiro</h3>
+            <div className="booking-promo-dialog__daily-rates">
+              <div>
+                <span>Domingo a quarta</span>
+                <strong>R$ 40/h</strong>
+              </div>
+              <div>
+                <span>Quinta a sábado</span>
+                <strong>R$ 45/h</strong>
+                <small>10% abaixo da tarifa normal de R$ 50/h</small>
+              </div>
+            </div>
+          </section>
+          <section
+            className="booking-promo-dialog__windows"
+            aria-label="Valores por faixa de horário"
+          >
+            <h3>Valores por faixa de horário</h3>
+            <div className="booking-promo-dialog__day">
+              <h4>Domingo a quarta</h4>
+              <div className="booking-promo-dialog__chips">
+                <span>
+                  <small>18h–19h</small>
+                  <b>R$ 40</b>
+                </span>
+                <span>
+                  <small>19h–21h</small>
+                  <b>R$ 80</b>
+                </span>
+                <span>
+                  <small>21h–23h</small>
+                  <b>R$ 80</b>
+                </span>
+                <span>
+                  <small>23h–0h</small>
+                  <b>R$ 40</b>
+                </span>
+              </div>
+            </div>
+            <div className="booking-promo-dialog__day">
+              <h4>Quinta a sábado</h4>
+              <div className="booking-promo-dialog__chips">
+                <span>
+                  <small>18h–19h</small>
+                  <b>R$ 50</b>
+                </span>
+                <span>
+                  <small>19h–21h</small>
+                  <b>R$ 100</b>
+                </span>
+                <span>
+                  <small>21h–23h</small>
+                  <b>R$ 100</b>
+                </span>
+                <span>
+                  <small>23h–0h</small>
+                  <b>R$ 50</b>
+                </span>
+              </div>
+            </div>
+          </section>
           <button
             type="button"
             className="btn pri lg booking-promo-dialog__ok"

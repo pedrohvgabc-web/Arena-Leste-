@@ -14,7 +14,10 @@ export const Route = createFileRoute("/pagamento/retorno")({
     slug: typeof search["slug"] === "string" ? search["slug"].slice(0, 160) : "",
   }),
   head: () => ({
-    meta: [{ title: `Pagamento — ${SITE.name}` }, { name: "robots", content: "noindex, nofollow" }],
+    meta: [
+      { title: `Retorno de pagamento — ${SITE.name}` },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
   }),
   component: PaymentReturnPage,
 });
