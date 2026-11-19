@@ -684,6 +684,7 @@ function auditDetails(details: Record<string, unknown> | null) {
 
 function AdminAudit() {
   const fetchAudit = useServerFn(adminAudit);
+  const [draftFilters, setDraftFilters] = useState({ dateFrom: "", dateTo: "", actionType: "all" });
   const [filters, setFilters] = useState({ dateFrom: "", dateTo: "", actionType: "all" });
   const query = useQuery({
     queryKey: ["admin-audit", filters],
@@ -715,8 +716,8 @@ function AdminAudit() {
           <input
             type="date"
             className="login-input mt-1"
-            value={filters.dateFrom}
-            onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+            value={draftFilters.dateFrom}
+            onChange={(e) => setDraftFilters({ ...draftFilters, dateFrom: e.target.value })}
           />
         </label>
         <label className="text-sm font-semibold">
@@ -724,16 +725,16 @@ function AdminAudit() {
           <input
             type="date"
             className="login-input mt-1"
-            value={filters.dateTo}
-            onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+            value={draftFilters.dateTo}
+            onChange={(e) => setDraftFilters({ ...draftFilters, dateTo: e.target.value })}
           />
         </label>
         <label className="text-sm font-semibold">
           Tipo de alteração
           <select
             className="login-input mt-1"
-            value={filters.actionType}
-            onChange={(e) => setFilters({ ...filters, actionType: e.target.value })}
+            value={draftFilters.actionType}
+            onChange={(e) => setDraftFilters({ ...draftFilters, actionType: e.target.value })}
           >
             <option value="all">Todas</option>
             <option value="booking">Reservas</option>
@@ -744,13 +745,22 @@ function AdminAudit() {
             <option value="login">Entradas no sistema</option>
           </select>
         </label>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => setFilters({ dateFrom: "", dateTo: "", actionType: "all" })}
-        >
-          Limpar
-        </button>
+        <div className="flex gap-2 sm:col-span-4 sm:justify-end">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              const empty = { dateFrom: "", dateTo: "", actionType: "all" };
+              setDraftFilters(empty);
+              setFilters(empty);
+            }}
+          >
+            Mostrar tudo
+          </button>
+          <button type="button" className="btn pri" onClick={() => setFilters(draftFilters)}>
+            Filtrar alterações
+          </button>
+        </div>
       </div>
       <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
         <table className="w-full min-w-[720px] text-left text-sm">

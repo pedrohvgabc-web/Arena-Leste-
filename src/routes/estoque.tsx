@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Barcode,
@@ -170,6 +170,10 @@ function Login() {
 }
 function WmsShell({ actor }: { actor: Actor }) {
   const logout = useServerFn(wmsLogout);
+  const fetchDashboard = useServerFn(wmsDashboard);
+  const fetchProducts = useServerFn(wmsProducts);
+  const fetchAudit = useServerFn(wmsAudit);
+  const fetchUsers = useServerFn(wmsUsers);
   const qc = useQueryClient();
   const [tab, setTab] = useState(actor.role === "caixa_local" ? "balcao" : "dashboard");
   const [guideOpen, setGuideOpen] = useState(
@@ -192,6 +196,35 @@ function WmsShell({ actor }: { actor: Actor }) {
           ["balcao", "Balcão / PDV", ShoppingCart],
           ["catalogo", "Produtos", Boxes],
         ];
+  useEffect(() => {
+    const requests = [
+      qc.prefetchQuery({
+        queryKey: ["wms-products"],
+        queryFn: () => fetchProducts(),
+        staleTime: 30_000,
+      }),
+    ];
+    if (actor.role === "admin_remote") {
+      requests.push(
+        qc.prefetchQuery({
+          queryKey: ["wms-dashboard"],
+          queryFn: () => fetchDashboard(),
+          staleTime: 30_000,
+        }),
+        qc.prefetchQuery({
+          queryKey: ["wms-audit"],
+          queryFn: () => fetchAudit(),
+          staleTime: 30_000,
+        }),
+        qc.prefetchQuery({
+          queryKey: ["wms-users"],
+          queryFn: () => fetchUsers(),
+          staleTime: 30_000,
+        }),
+      );
+    }
+    void Promise.allSettled(requests);
+  }, [actor.role, fetchAudit, fetchDashboard, fetchProducts, fetchUsers, qc]);
   async function signOut() {
     await logout();
     await qc.invalidateQueries({ queryKey: ["wms-auth"] });
@@ -370,6 +403,7 @@ function Dashboard({ actor }: { actor: Actor }) {
     queryFn: () => useServerFn(wmsDashboard)(),
     refetchInterval: 30000,
     refetchOnMount: "always",
+    staleTime: 30_000,
   });
   const d = q.data as any;
   if (q.isLoading) return <Loading />;
@@ -435,6 +469,7 @@ function Counter() {
     queryKey: ["wms-products"],
     queryFn: () => useServerFn(wmsProducts)(),
     refetchOnMount: "always",
+    staleTime: 30_000,
   });
   const sale = useServerFn(wmsCreateSale);
   const qc = useQueryClient();
@@ -474,7 +509,18 @@ function Counter() {
         eyebrow="operação local"
         title="Balcão rápido"
         copy="Bipe, confirme e baixe o estoque em uma transação."
+        action={
+          <button
+            type="button"
+            className="rounded-xl border border-white/15 px-4 py-3 text-sm font-bold"
+            onClick={() => void productsQ.refetch()}
+          >
+            Atualizar produtos
+          </button>
+        }
       />
+      {productsQ.isLoading && <Loading />}
+      {productsQ.error && <DataError onRetry={() => void productsQ.refetch()} />}
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div>
           <label className="relative block">
@@ -580,6 +626,7 @@ function Catalog({ actor }: { actor: Actor }) {
     queryKey: ["wms-products"],
     queryFn: () => useServerFn(wmsProducts)(),
     refetchOnMount: "always",
+    staleTime: 30_000,
   });
   const save = useServerFn(wmsSaveProduct);
   const qc = useQueryClient();
@@ -866,6 +913,7 @@ function Inventory() {
   const productsQ = useQuery({
     queryKey: ["wms-products"],
     queryFn: () => useServerFn(wmsProducts)(),
+    staleTime: 30_000,
   });
   const move = useServerFn(wmsStockMovement);
   const qc = useQueryClient();
@@ -948,7 +996,11 @@ function Inventory() {
   );
 }
 function Audit() {
-  const q = useQuery({ queryKey: ["wms-audit"], queryFn: () => useServerFn(wmsAudit)() });
+  const q = useQuery({
+    queryKey: ["wms-audit"],
+    queryFn: () => useServerFn(wmsAudit)(),
+    staleTime: 30_000,
+  });
   return (
     <section>
       <Title
@@ -995,7 +1047,12 @@ function Users() {
   const fetchUsers = useServerFn(wmsUsers);
   const saveUser = useServerFn(wmsSaveUser);
   const qc = useQueryClient();
-  const query = useQuery({ queryKey: ["wms-users"], queryFn: () => fetchUsers(), retry: false });
+  const query = useQuery({
+    queryKey: ["wms-users"],
+    queryFn: () => fetchUsers(),
+    retry: false,
+    staleTime: 30_000,
+  });
   const [v, setV] = useState<any>({
     username: "",
     displayName: "",
