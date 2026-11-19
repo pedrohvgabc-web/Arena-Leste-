@@ -534,6 +534,7 @@ export const createBooking = createServerFn({ method: "POST" })
 
     // Same slot picked twice is a click mistake, not a second reservation.
     const starts = [...new Set(data.starts)].sort();
+    if (!starts.length) return { ok: false as const, error: "Escolha pelo menos um horário." };
 
     const code = `AL-${randomCode(6)}`;
     const privacyConsentAt = new Date().toISOString();
@@ -667,7 +668,13 @@ export const createBooking = createServerFn({ method: "POST" })
           data.method,
           totalDurationMinutes,
         );
+        if (!Number.isSafeInteger(pricing.totalCents) || pricing.totalCents <= 0) {
+          return { code: null, error: "Não foi possível calcular o valor desta reserva." };
+        }
         const chargeAmount = initialPaymentCents(pricing.totalCents, paymentPlan);
+        if (!Number.isSafeInteger(chargeAmount) || chargeAmount <= 0) {
+          return { code: null, error: "O valor da cobrança precisa ser maior que zero." };
+        }
         const paymentShares = splitAmountCents(chargeAmount, slots.length);
         const inserted: Array<{ id: string }> = [];
         for (const [index, slot] of slots.entries()) {

@@ -285,7 +285,9 @@ function Reservar() {
     [availabilityQuery.data],
   );
   const selectedSlots = slots.filter(
-    (slot) => starts.includes(slot.start) && slot.status === "available",
+    // Keep the customer's selection stable while availability refreshes. The server
+    // performs the final conflict check when the reservation is submitted.
+    (slot) => starts.includes(slot.start),
   );
   const selectedDurationMinutes = selectedSlots.reduce(
     (total, slot) => total + slotDurationMinutes(slot),
@@ -293,9 +295,7 @@ function Reservar() {
   );
   useEffect(() => {
     if (availabilityQuery.isLoading || availabilityQuery.isFetching) return;
-    const available = new Set(
-      slots.filter((slot) => slot.status === "available").map((slot) => slot.start),
-    );
+    const available = new Set(slots.map((slot) => slot.start));
     setStarts((current) => {
       const next = current.filter((value) => available.has(value));
       return next.length === current.length ? current : next;
@@ -439,6 +439,10 @@ function Reservar() {
   function continueAfterCancellationNotice() {
     cancellationDialogRef.current?.close();
     setCancellationDialogOpen(false);
+    if (!selectedSlots.length || !totalCents || !selectedDurationMinutes) {
+      setError("Os horários selecionados não puderam ser confirmados. Volte e escolha novamente.");
+      return;
+    }
     if (paymentMethod === "pix" && paymentMode === "infinitepay") {
       setPaymentPlan("full");
       setPaymentPlanLocked(false);
@@ -487,7 +491,16 @@ function Reservar() {
   }
 
   async function submitDraft(draft: BookingDraft, selectedPlan: PaymentPlan) {
-    if (!selectedSpace || !date || !selectedSlots.length) return;
+    if (
+      !selectedSpace ||
+      !date ||
+      !selectedSlots.length ||
+      !totalCents ||
+      !selectedDurationMinutes
+    ) {
+      setError("Escolha pelo menos um horário válido antes de seguir para o pagamento.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
