@@ -2833,12 +2833,13 @@ tr:last-child td {
   align-items: center;
   justify-content: center;
   gap: 0.55rem;
-  border: 1px solid #25a858;
+  border: 1px solid #043e1c;
   border-radius: 0.9rem;
   padding: 0.75rem 0.85rem;
-  background: #e2f8e9;
-  color: #145c2d;
-  font-weight: 700;
+  background: #075a2a;
+  color: #fff;
+  box-shadow: 0 5px 18px rgb(7 90 42 / 0.3);
+  font-weight: 800;
   text-align: center;
   text-decoration: none;
   transition:
@@ -2848,24 +2849,24 @@ tr:last-child td {
     transform 160ms ease;
 }
 .booking-hours-help--whatsapp:hover {
-  border-color: #168a43;
-  background: #d1f2dc;
-  color: #104d26;
-  box-shadow: 0 4px 14px rgb(37 168 88 / 0.18);
+  border-color: #033816;
+  background: #06451f;
+  color: #fff;
+  box-shadow: 0 6px 20px rgb(37 211 102 / 0.38);
   transform: translateY(-1px);
 }
 .booking-hours-help--whatsapp:focus-visible {
-  outline: 3px solid #168a43;
+  outline: 3px solid #25d366;
   outline-offset: 3px;
 }
 .booking-hours-whatsapp-icon {
   width: 1.2rem;
   height: 1.2rem;
   flex: 0 0 auto;
-  fill: #168a43;
+  fill: #fff;
 }
 .booking-hours-whatsapp-handset {
-  fill: #fff;
+  fill: #075a2a;
 }
 @media (max-width: 48rem) {
   .booking-hours-row {
