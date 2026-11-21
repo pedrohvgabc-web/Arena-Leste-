@@ -65,6 +65,8 @@ function PaymentReturnPage() {
           <CheckCircle2 className="h-7 w-7" />
         ) : review ? (
           <CircleAlert className="h-7 w-7" />
+        ) : query.isError ? (
+          <CircleAlert className="h-7 w-7" />
         ) : (
           <LoaderCircle className="h-7 w-7 animate-spin" />
         )}
@@ -77,9 +79,11 @@ function PaymentReturnPage() {
           ? "Pagamento confirmado"
           : review
             ? "Pagamento recebido"
-            : result?.status === "not_found" || !canVerify
-              ? "Confira seu pagamento"
-              : "Confirmando pagamento"}
+            : query.isError
+              ? "Não foi possível confirmar agora"
+              : result?.status === "not_found" || !canVerify
+                ? "Confira seu pagamento"
+                : "Confirmando pagamento"}
       </h1>
       <p className="mt-3 leading-relaxed text-muted-foreground">
         {confirmed
@@ -92,9 +96,11 @@ function PaymentReturnPage() {
               : depositPaid
                 ? `A InfinitePay confirmou a entrada de ${formatBRL(Number(result.chargedAmountCents))}, mas a reserva precisa de revisão. O saldo pendente é ${formatBRL(Number(result.balanceDueCents))}; fale com a Arena.`
                 : "A InfinitePay confirmou o pagamento, mas a reserva precisa de conferência da equipe. Fale com a Arena antes de considerar o horário confirmado."
-            : result?.status === "not_found" || !canVerify
-              ? "Não foi possível validar os dados de retorno. Entre em contato com a Arena e informe o código do pedido."
-              : "Estamos consultando a InfinitePay diretamente. Esta página de retorno, sozinha, não confirma que o pagamento foi aprovado."}
+            : query.isError
+              ? "A consulta de confirmação falhou. Isso não significa que o pagamento foi recusado; tente consultar novamente ou fale com a Arena."
+              : result?.status === "not_found" || !canVerify
+                ? "Não foi possível validar os dados de retorno. Entre em contato com a Arena e informe o código do pedido."
+                : "Estamos consultando a InfinitePay diretamente. Esta página de retorno, sozinha, não confirma que o pagamento foi aprovado."}
       </p>
       {query.isError && (
         <p role="status" className="mt-4 rounded-xl bg-warning/10 p-4 text-sm text-warning">
@@ -102,9 +108,26 @@ function PaymentReturnPage() {
           webhook; tente atualizar esta página em instantes.
         </p>
       )}
+      {query.isError && (
+        <button
+          type="button"
+          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-primary px-5 font-bold text-primary-foreground disabled:opacity-60"
+          onClick={() => void query.refetch()}
+          disabled={query.isFetching}
+          aria-live="polite"
+        >
+          {query.isFetching ? "Consultando…" : "Tentar novamente"}
+        </button>
+      )}
       <div className="mt-7 flex flex-wrap gap-3">
         <Link
-          to={result?.kind === "tournament" ? "/torneio" : "/reservar"}
+          to={
+            result?.kind === "tournament"
+              ? "/torneio"
+              : result?.kind === "wms"
+                ? "/estoque"
+                : "/reservar"
+          }
           className="inline-flex min-h-11 items-center rounded-full bg-primary px-5 font-bold text-primary-foreground"
         >
           {result?.kind === "tournament"

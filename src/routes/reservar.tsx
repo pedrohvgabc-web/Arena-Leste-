@@ -426,7 +426,7 @@ function Reservar() {
     setBookingStep(nextStep);
     setError(null);
     requestAnimationFrame(() => {
-      const step = document.querySelector<HTMLElement>(`[data-booking-step="${nextStep}"]`);
+      const step = document.querySelector<HTMLElement>(`[data-booking-step-focus="${nextStep}"]`);
       if (!step) return;
       step.focus({ preventScroll: true });
       step.scrollIntoView({
@@ -675,6 +675,7 @@ function Reservar() {
             <div className="booking-flow">
               <fieldset
                 data-booking-step="1"
+                data-booking-step-focus="1"
                 data-active={bookingStep === 1}
                 tabIndex={-1}
                 disabled={Boolean(releasedOfferId)}
@@ -691,7 +692,7 @@ function Reservar() {
                     >
                       <b>{index === 0 ? "Cuniã" : "Pinheiro Machado"}</b>
                       <span>{option.address}</span>
-                      <em>Quadras de areia · Vôlei de praia</em>
+                      <em>Quadras de areia · Vôlei de praia · Futevôlei</em>
                     </button>
                   ))}
                 </div>
@@ -733,6 +734,7 @@ function Reservar() {
 
               <fieldset
                 data-booking-step="2"
+                data-booking-step-focus="2"
                 data-active={bookingStep === 2}
                 tabIndex={-1}
                 className={!selectedSpace ? "lk" : ""}
@@ -744,9 +746,17 @@ function Reservar() {
                     <LoaderCircle size={16} className="loading-icon" /> Consultando dias abertos…
                   </p>
                 ) : datesQuery.isError ? (
-                  <p className="hint" role="alert">
-                    Não foi possível consultar a agenda.
-                  </p>
+                  <div className="hint" role="alert">
+                    <p>Não foi possível consultar a agenda.</p>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={datesQuery.isFetching}
+                      onClick={() => void datesQuery.refetch()}
+                    >
+                      {datesQuery.isFetching ? "Tentando novamente…" : "Tentar novamente"}
+                    </button>
+                  </div>
                 ) : openDates.length ? (
                   <div className="booking-calendar">
                     <div className="booking-calendar__header">
@@ -857,9 +867,17 @@ function Reservar() {
                       <LoaderCircle size={16} className="loading-icon" /> Consultando horários…
                     </p>
                   ) : availabilityQuery.isError ? (
-                    <p className="hint" role="alert">
-                      Não foi possível consultar este horário.
-                    </p>
+                    <div className="hint" role="alert">
+                      <p>Não foi possível consultar os horários deste dia.</p>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={availabilityQuery.isFetching}
+                        onClick={() => void availabilityQuery.refetch()}
+                      >
+                        {availabilityQuery.isFetching ? "Tentando novamente…" : "Tentar novamente"}
+                      </button>
+                    </div>
                   ) : !date ? (
                     <p className="hint">Escolha um dia aberto acima para carregar os horários.</p>
                   ) : slots.length ? (
@@ -895,12 +913,24 @@ function Reservar() {
                 </fieldset>
 
                 <a
-                  className="mono booking-help booking-hours-help"
-                  href={waLink("Olá! Quero negociar horários diferenciados.")}
+                  className="mono booking-help booking-hours-help booking-hours-help--whatsapp"
+                  href={waLink("Olá! Quero negociar um horário diferenciado.")}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Quero negociar horários diferenciados ↗
+                  <span>Quero negociar um horário diferenciado</span>
+                  <svg
+                    className="booking-hours-whatsapp-icon"
+                    viewBox="0 0 32 32"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M16 3.2A12.8 12.8 0 0 0 5 22.5l-1.7 6.3 6.5-1.7A12.8 12.8 0 1 0 16 3.2Z" />
+                    <path
+                      className="booking-hours-whatsapp-handset"
+                      d="M21.1 18.2c-.28-.14-1.65-.81-1.9-.9-.26-.1-.44-.14-.62.14-.18.28-.72.9-.88 1.08-.16.18-.32.2-.6.07-.28-.14-1.18-.43-2.24-1.38-.83-.74-1.38-1.63-1.54-1.91-.16-.28-.02-.43.12-.57.13-.13.28-.33.42-.49.14-.16.18-.28.27-.46.09-.18.05-.35-.02-.49-.07-.14-.62-1.51-.85-2.06-.22-.54-.45-.47-.62-.48h-.53c-.18 0-.49.07-.75.35-.25.28-.98.96-.98 2.34s1.01 2.72 1.15 2.91c.14.18 1.98 3.02 4.79 4.24.67.29 1.19.46 1.6.59.67.21 1.27.18 1.75.11.54-.08 1.64-.67 1.87-1.29.23-.63.23-1.17.16-1.29-.07-.12-.25-.19-.53-.33Z"
+                    />
+                  </svg>
                 </a>
               </div>
 
@@ -970,7 +1000,7 @@ function Reservar() {
                 <div className="g2 f booking-extra">
                   <label>
                     <span className="mono">Atividade principal</span>
-                    <input value="Vôlei de praia" readOnly />
+                    <input value="Vôlei de praia e futevôlei" readOnly />
                   </label>
                   <label>
                     <span className="mono">Pagamento</span>
@@ -1056,6 +1086,26 @@ function Reservar() {
                 {selectedSlots.length ? ` · ${formatDuration(selectedDurationMinutes)}` : ""}
                 <strong>{formatBRL(totalCents)}</strong>
               </p>
+              {bookingStep === 1 && !selectedSpace && (
+                <p
+                  id="booking-next-guidance"
+                  className="booking-mobile-controls__guidance"
+                  role="status"
+                >
+                  Escolha uma quadra para liberar a próxima etapa.
+                </p>
+              )}
+              {bookingStep === 2 && (!date || !selectedSlots.length) && (
+                <p
+                  id="booking-next-guidance"
+                  className="booking-mobile-controls__guidance"
+                  role="status"
+                >
+                  {!date
+                    ? "Escolha uma data aberta para ver os horários."
+                    : "Escolha pelo menos um horário disponível para continuar."}
+                </p>
+              )}
               <div className="booking-mobile-controls__actions">
                 {bookingStep > 1 && !releasedOfferId && (
                   <button
@@ -1073,6 +1123,12 @@ function Reservar() {
                     disabled={
                       (bookingStep === 1 && !selectedSpace) ||
                       (bookingStep === 2 && (!date || !selectedSlots.length))
+                    }
+                    aria-describedby={
+                      (bookingStep === 1 && !selectedSpace) ||
+                      (bookingStep === 2 && (!date || !selectedSlots.length))
+                        ? "booking-next-guidance"
+                        : undefined
                     }
                     onClick={continueBookingStep}
                   >

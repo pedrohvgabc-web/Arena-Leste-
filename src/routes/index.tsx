@@ -185,7 +185,7 @@ function HomePage() {
 
   return (
     <div id="vHome">
-      <div id="intro" aria-hidden="true">
+      <div id="intro" className="home-intro" aria-hidden="true">
         <div>
           <p>Abrindo os espaços da Arena Leste…</p>
           <span />
@@ -215,6 +215,14 @@ function HomePage() {
           <a className="l" href={SITE.instagram} target="_blank" rel="noopener noreferrer">
             Instagram
           </a>
+          <div className="mobile-nav-links" aria-label="Atalhos da página">
+            <a href="#unidades">Unidades</a>
+            <a href="#torneio">Torneio</a>
+            <a href="#contato">Contato</a>
+            <a href={SITE.instagram} target="_blank" rel="noopener noreferrer">
+              Instagram
+            </a>
+          </div>
           <Link className="btn pri" to="/reservar" search={{ unit: "unidade-1" }}>
             Agendar
           </Link>

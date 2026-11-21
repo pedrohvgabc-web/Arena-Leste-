@@ -107,7 +107,7 @@ a {
   color: var(--bg);
   display: grid;
   place-items: center;
-  animation: curtain 900ms var(--eio) 1.1s forwards;
+  animation: curtain 350ms var(--eio) 250ms forwards;
 }
 #intro p {
   font: 800 clamp(1.5rem, 1rem + 3vw, 3rem)/1 var(--fd);
@@ -225,9 +225,35 @@ nav a.l.on::after,
 nav a.l:hover::after {
   scale: 1 1;
 }
+.mobile-nav-links {
+  display: none;
+}
 @media (max-width: 46rem) {
+  nav .wrap {
+    height: auto;
+    flex-wrap: wrap;
+    padding-block: 0.35rem;
+  }
   nav a.l {
     display: none;
+  }
+  .mobile-nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem max(1rem, env(safe-area-inset-left));
+    border-top: 1px solid var(--bd);
+    background: var(--sf);
+  }
+  .mobile-nav-links a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    padding: 0.5rem 0.65rem;
+    border-radius: 0.5rem;
+    font: 500 0.68rem var(--fm);
+    text-decoration: none;
+    text-transform: uppercase;
   }
 }
 .btn {
@@ -2799,6 +2825,47 @@ tr:last-child td {
   align-self: center;
   margin: 0;
   line-height: 1.35;
+}
+.booking-hours-help--whatsapp {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid #25a858;
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.85rem;
+  background: #e2f8e9;
+  color: #145c2d;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.booking-hours-help--whatsapp:hover {
+  border-color: #168a43;
+  background: #d1f2dc;
+  color: #104d26;
+  box-shadow: 0 4px 14px rgb(37 168 88 / 0.18);
+  transform: translateY(-1px);
+}
+.booking-hours-help--whatsapp:focus-visible {
+  outline: 3px solid #168a43;
+  outline-offset: 3px;
+}
+.booking-hours-whatsapp-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex: 0 0 auto;
+  fill: #168a43;
+}
+.booking-hours-whatsapp-handset {
+  fill: #fff;
 }
 @media (max-width: 48rem) {
   .booking-hours-row {
