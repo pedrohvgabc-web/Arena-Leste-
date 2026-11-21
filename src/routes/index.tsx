@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState, type CSSProperties } from "react";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Moon, Sun } from "lucide-react";
 import { LazyLoopVideo } from "@/components/LazyLoopVideo";
 import { GravaiSection } from "@/components/GravaiSection";
 import { PhotoCtaSection } from "@/components/PhotoCtaSection";
@@ -41,8 +41,19 @@ const tickerText =
 function HomePage() {
   const [mapUnit, setMapUnit] = useState<(typeof SITE.units)[number]>(SITE.units[0]);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
+    try {
+      const savedTheme = window.localStorage.getItem("arena-leste-theme");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        document.documentElement.dataset.theme = savedTheme;
+        setTheme(savedTheme);
+      }
+    } catch {
+      document.documentElement.dataset.theme = "light";
+    }
+
     const intro = document.querySelector<HTMLElement>("#intro");
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (intro && reduced.matches) intro.remove();
@@ -223,9 +234,30 @@ function HomePage() {
               Instagram
             </a>
           </div>
-          <Link className="btn pri" to="/reservar" search={{ unit: "unidade-1" }}>
-            Agendar
-          </Link>
+          <div className="nav-actions">
+            <button
+              className="theme-toggle"
+              type="button"
+              aria-label={`Ativar modo ${theme === "light" ? "escuro" : "claro"}`}
+              aria-pressed={theme === "dark"}
+              title={`Modo ${theme === "light" ? "escuro" : "claro"}`}
+              onClick={() => {
+                const nextTheme = theme === "light" ? "dark" : "light";
+                document.documentElement.dataset.theme = nextTheme;
+                setTheme(nextTheme);
+                try {
+                  window.localStorage.setItem("arena-leste-theme", nextTheme);
+                } catch {
+                  // O tema continua funcionando mesmo sem armazenamento disponível.
+                }
+              }}
+            >
+              {theme === "light" ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />}
+            </button>
+            <Link className="btn pri" to="/reservar" search={{ unit: "unidade-1" }}>
+              Agendar
+            </Link>
+          </div>
         </div>
       </nav>
 

@@ -132,6 +132,18 @@ function RootComponent() {
   const hasZipLayout = ["/", "/reservar", "/torneio", "/admin", "/fotos"].includes(pathname);
   const showReleasedSlotsNotice =
     pathname !== "/admin" && pathname !== "/fotos" && !pathname.startsWith("/api/");
+
+  useEffect(() => {
+    try {
+      const savedTheme = window.localStorage.getItem("arena-leste-theme");
+      if (savedTheme === "dark" || savedTheme === "light") {
+        document.documentElement.dataset.theme = savedTheme;
+      }
+    } catch {
+      document.documentElement.dataset.theme = "light";
+    }
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <a href="#conteudo" className="skip">

@@ -32,6 +32,7 @@
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0c0806;
   --sf: #17100c;
   --tx: #f6f0ea;
@@ -187,6 +188,41 @@ nav .wrap {
   align-items: center;
   gap: var(--s1);
   height: 3.5rem;
+}
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.theme-toggle {
+  display: inline-grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--bd);
+  border-radius: 999px;
+  background: var(--sf);
+  color: var(--tx);
+  cursor: pointer;
+  transition:
+    background-color var(--d2),
+    border-color var(--d2),
+    color var(--d2),
+    transform var(--d2);
+}
+.theme-toggle:hover {
+  border-color: var(--ac);
+  color: var(--ac);
+  transform: rotate(-8deg);
+}
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: 3px;
+}
+.theme-toggle svg {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 .logo {
   font-weight: 800;
@@ -2873,22 +2909,20 @@ tr:last-child td {
   content: "";
   pointer-events: none;
   transform: translateX(-220%) skewX(-22deg);
-  animation: booking-hours-light-sweep 3.4s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
+  animation: booking-hours-light-sweep 2.8s ease-in-out infinite;
 }
 @keyframes booking-hours-light-sweep {
-  0%,
-  8% {
+  0% {
     opacity: 0;
     transform: translateX(-220%) skewX(-22deg);
   }
-  14% {
+  10% {
     opacity: 1;
   }
-  48% {
+  85% {
     opacity: 0.9;
     transform: translateX(620%) skewX(-22deg);
   }
-  55%,
   100% {
     opacity: 0;
     transform: translateX(620%) skewX(-22deg);
@@ -3665,12 +3699,20 @@ tr:last-child td {
     height: 2.45rem;
     object-fit: contain;
   }
-  nav .wrap > .btn {
+  .nav-actions {
     grid-area: action;
+    justify-self: end;
+    gap: 0.4rem;
+  }
+  .nav-actions > .btn {
     min-height: 2.55rem;
     padding-inline: 0.85rem;
     font-size: 0.88rem;
     white-space: nowrap;
+  }
+  .theme-toggle {
+    width: 2.75rem;
+    height: 2.75rem;
   }
   .mobile-nav-links {
     grid-area: links;
