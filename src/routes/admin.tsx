@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -269,9 +269,11 @@ function Dashboard({
       qc.invalidateQueries({ queryKey: ["admin-pending"] });
     } else toast.error(r.error);
   }
-  if (day.error) {
-    qc.invalidateQueries({ queryKey: ["admin-auth"] });
-  }
+  useEffect(() => {
+    if (day.error instanceof Error && day.error.message === "UNAUTHORIZED") {
+      void qc.invalidateQueries({ queryKey: ["admin-auth"] });
+    }
+  }, [day.error, qc]);
 
   return (
     <div id="vAdm" className="adm">
@@ -505,7 +507,25 @@ function Dashboard({
                   </select>
                 </div>
 
-                {day.isLoading ? (
+                {day.error ? (
+                  <div
+                    className="mt-8 rounded-2xl border border-dashed border-border p-6 text-center"
+                    role="alert"
+                  >
+                    <p className="text-muted-foreground">
+                      Não foi possível carregar o histórico agora. Confira sua conexão e tente
+                      novamente.
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-4 h-11 rounded-lg border border-border px-4 font-semibold"
+                      onClick={() => void day.refetch()}
+                      disabled={day.isFetching}
+                    >
+                      {day.isFetching ? "Tentando novamente…" : "Tentar novamente"}
+                    </button>
+                  </div>
+                ) : day.isLoading ? (
                   <p className="mt-10 flex items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Carregando…

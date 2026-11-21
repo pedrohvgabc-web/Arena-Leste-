@@ -1300,7 +1300,7 @@ function Users() {
           </Field>
           <Field label={`Senha ${editing ? "(deixe em branco para manter)" : ""}`}>
             <input
-              required
+              required={!editing}
               minLength={8}
               type="password"
               value={v.password}

@@ -23,20 +23,28 @@ function PhotosPage() {
   const [court, setCourt] = useState("all");
   const [visible, setVisible] = useState(40);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const [expandedPhoto, setExpandedPhoto] = useState<PhotoGalleryPhoto | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let active = true;
-    void fetchPhotos().then((result) => {
-      if (active) {
-        setPhotos(result);
-        setLoading(false);
+    setLoading(true);
+    setLoadError(false);
+    void (async () => {
+      try {
+        const result = await fetchPhotos();
+        if (active) setPhotos(result);
+      } catch {
+        if (active) setLoadError(true);
+      } finally {
+        if (active) setLoading(false);
       }
-    });
+    })();
     return () => {
       active = false;
     };
-  }, [fetchPhotos]);
+  }, [fetchPhotos, retryCount]);
   useEffect(() => {
     if (!expandedPhoto) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -153,6 +161,23 @@ function PhotosPage() {
           <p className="mt-12 flex items-center gap-2 text-muted-foreground">
             <Loader2 className="animate-spin" size={18} /> Carregando fotos…
           </p>
+        ) : loadError ? (
+          <div
+            className="mt-12 rounded-3xl border border-dashed border-border p-8 text-center"
+            role="alert"
+          >
+            <ImageOff className="mx-auto mb-3 text-muted-foreground" aria-hidden="true" />
+            <p className="text-muted-foreground">
+              Não foi possível carregar as fotos agora. Confira sua conexão e tente novamente.
+            </p>
+            <button
+              className="btn pri mt-5"
+              type="button"
+              onClick={() => setRetryCount((count) => count + 1)}
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : shown.length === 0 ? (
           <div className="mt-12 rounded-3xl border border-dashed border-border p-12 text-center text-muted-foreground">
             <ImageOff className="mx-auto mb-3" /> Nenhuma foto encontrada com esse filtro.
