@@ -3574,3 +3574,365 @@ tr:last-child td {
     animation: none !important;
   }
 }
+
+/* A camada recolhida do WhatsApp não pode bloquear toques no conteúdo abaixo. */
+.wpp-menu {
+  pointer-events: none;
+}
+.wpp-menu > .wpp {
+  pointer-events: auto;
+}
+.wpp-menu.is-open .wpp-options {
+  pointer-events: auto;
+}
+
+@media (max-width: 46rem) {
+  #intro {
+    display: none !important;
+  }
+  nav .wrap {
+    display: grid;
+    grid-template-areas:
+      "brand action"
+      "links links";
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: 2.7rem auto;
+    align-items: center;
+    gap: 0.15rem 0.65rem;
+    height: auto;
+    padding-block: 0.2rem;
+  }
+  nav .logo {
+    grid-area: brand;
+    min-width: 0;
+    font-size: 1rem;
+  }
+  nav .logo img {
+    width: auto;
+    height: 2.45rem;
+    object-fit: contain;
+  }
+  nav .wrap > .btn {
+    grid-area: action;
+    min-height: 2.55rem;
+    padding-inline: 0.85rem;
+    font-size: 0.88rem;
+    white-space: nowrap;
+  }
+  .mobile-nav-links {
+    grid-area: links;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0.1rem;
+    width: 100%;
+    min-width: 0;
+    padding: 0.05rem 0 0;
+    border-top: 0;
+    background: transparent;
+  }
+  .mobile-nav-links a {
+    min-height: 2.2rem;
+    padding-inline: 0.12rem;
+    font-size: 0.62rem;
+    white-space: nowrap;
+  }
+
+  .hero {
+    min-height: calc(100svh - 6.9rem);
+    min-height: calc(100dvh - 6.9rem);
+    align-content: center;
+    padding-block: 0.7rem;
+  }
+  .hero .wrap {
+    align-self: center;
+  }
+  .hero .wrap > .mono {
+    margin: 0 0 0.15rem;
+    font-size: 0.62rem;
+  }
+  .hero .big {
+    margin: 0.15rem 0 0.55rem;
+    font-size: clamp(3rem, 12.5vw, 4.5rem);
+    line-height: 0.84;
+    letter-spacing: -0.045em;
+  }
+  .hero .big span {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  .hero .big em {
+    translate: 0 0;
+    animation: none;
+  }
+  .hero p.lead {
+    max-width: 35ch;
+    margin: 0 0 0.6rem;
+    font-size: clamp(0.96rem, 4.25vw, 1.08rem);
+    line-height: 1.22;
+    opacity: 1;
+    animation: none;
+  }
+  .hero .cta {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
+    gap: 0.45rem;
+    opacity: 1;
+    animation: none;
+  }
+  .hero .cta .btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 3rem;
+    padding-inline: 0.45rem;
+    font-size: 0.84rem;
+    line-height: 1.1;
+    white-space: nowrap;
+    touch-action: manipulation;
+  }
+  .hero-booking-cta {
+    border-width: 1px !important;
+    animation: none !important;
+    box-shadow: 0 0.55rem 1.2rem rgb(115 25 3 / 0.38) !important;
+  }
+  .hero .hero-secondary-cta {
+    min-height: 2.25rem;
+    margin: 0.45rem 0 0 !important;
+    padding: 0.25rem 0;
+    font-size: 0.78rem;
+    line-height: 1.25;
+    transform: none;
+  }
+  .landing-promo-cta {
+    width: 100%;
+    gap: 0.12rem;
+    margin-top: 0.55rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.9rem;
+    animation: none;
+  }
+  .landing-promo-cta .mono {
+    font-size: 0.58rem;
+    line-height: 1.2;
+  }
+  .landing-promo-cta strong {
+    font-size: clamp(1.15rem, 4.8vw, 1.5rem);
+    line-height: 1;
+  }
+  .landing-promo-cta b {
+    font-size: 0.73rem;
+    line-height: 1.2;
+  }
+  .landing-promo-cta__beam {
+    animation: none;
+    opacity: 0.22;
+  }
+  .hero .cue,
+  .hero .fol {
+    display: none !important;
+  }
+
+  .rh2 {
+    min-height: 3.25rem;
+    padding: 0.2rem 0.75rem;
+  }
+  .rh2 img {
+    height: 2.2rem;
+  }
+  .rb {
+    padding-block: 0.75rem 6.5rem;
+  }
+  .rt {
+    margin-block: 0.35rem 0.75rem;
+    font-size: clamp(2.6rem, 10vw, 3.5rem);
+    line-height: 0.9;
+  }
+  .uc {
+    gap: 0.18rem;
+    padding: 0.8rem;
+    border-radius: 14px;
+  }
+  .uc b {
+    font-size: clamp(1.55rem, 6vw, 1.9rem);
+  }
+  .uc span {
+    font-size: 0.84rem;
+    line-height: 1.25;
+  }
+  .booking-flow [data-booking-step][data-active="true"] {
+    animation-duration: 180ms;
+  }
+  .booking-flow fieldset[data-active="true"] {
+    padding: 0.7rem;
+    border-radius: 14px;
+  }
+  .booking-mobile-controls {
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 14px;
+  }
+  .booking-mobile-controls__summary {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.25;
+  }
+  .booking-mobile-controls__actions .btn {
+    min-height: 2.7rem;
+    padding-inline: 0.8rem;
+    font-size: 0.88rem;
+  }
+  .booking-calendar {
+    max-width: none;
+    margin-top: 0.4rem;
+    padding: 0.55rem;
+    border-radius: 14px;
+  }
+  .booking-calendar__header {
+    grid-template-columns: 2.3rem minmax(0, 1fr) 2.3rem;
+    gap: 0.3rem;
+  }
+  .booking-calendar__header strong {
+    font-size: 1.12rem;
+  }
+  .booking-calendar__nav {
+    width: 2.3rem;
+    height: 2.3rem;
+    font-size: 1.35rem;
+  }
+  .booking-calendar__range,
+  .booking-calendar__legend {
+    display: none;
+  }
+  .booking-calendar__weekdays {
+    margin-block: 0.3rem 0.15rem;
+    font-size: 0.65rem;
+  }
+  .booking-calendar__grid {
+    gap: 0.15rem;
+  }
+  .booking-calendar__day {
+    min-height: 2rem;
+    border-radius: 0.5rem;
+    font-size: 0.82rem;
+  }
+  .booking-date-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-top: 0.45rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--bd);
+    border-radius: 12px;
+    background: var(--sf);
+  }
+  .booking-date-summary__label {
+    display: grid;
+    gap: 0.1rem;
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+  .booking-date-summary__label strong {
+    color: var(--tx);
+  }
+  .booking-date-summary__label span {
+    color: var(--mu);
+    font-size: 0.7rem;
+  }
+  .booking-date-summary .btn,
+  .booking-calendar__hide {
+    min-height: 2.3rem;
+    padding-inline: 0.7rem;
+    font-size: 0.76rem;
+    white-space: nowrap;
+  }
+  .booking-calendar__hide {
+    margin-top: 0.45rem;
+  }
+  .booking-hours-row {
+    gap: 0.45rem;
+  }
+  .booking-hours-row .opts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
+  }
+  .booking-hours-row .opt {
+    min-width: 0;
+    min-height: 3.2rem;
+    padding: 0.3rem 0.2rem;
+    border-radius: 10px;
+    font-size: 0.82rem;
+  }
+  .booking-hours-row .opt small {
+    margin-top: 0.1rem;
+    font-size: 0.5rem;
+    line-height: 1.1;
+  }
+  .booking-promo-summary {
+    margin: 0.45rem 0 0.55rem;
+    border-radius: 14px;
+  }
+  .booking-promo-summary__inner {
+    grid-template-columns: 2.1rem minmax(0, 1fr);
+    gap: 0.35rem 0.55rem;
+    padding: 0.55rem;
+    border-radius: 12px;
+  }
+  .booking-promo-summary__icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9px;
+  }
+  .booking-promo-summary__icon svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  .booking-promo-summary__eyebrow {
+    font-size: 0.57rem;
+  }
+  .booking-promo-summary h3 {
+    margin-block: 0.1rem 0.18rem;
+    font-size: 1.13rem;
+    line-height: 1;
+  }
+  .booking-promo-summary p {
+    font-size: 0.76rem;
+    line-height: 1.28;
+  }
+  .booking-promo-summary__note {
+    margin-top: 0.16rem !important;
+    font-size: 0.7rem !important;
+  }
+  .booking-promo-summary__button {
+    grid-column: 2;
+    justify-self: start;
+    min-height: 2.1rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.7rem;
+  }
+  .booking-promo {
+    display: none !important;
+  }
+}
+
+@media (max-width: 22.5rem) {
+  .mobile-nav-links a {
+    font-size: 0.57rem;
+  }
+  .hero .big {
+    font-size: 3rem;
+  }
+  .hero .cta {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  }
+  .hero .cta .btn {
+    padding-inline: 0.25rem;
+    font-size: 0.76rem;
+  }
+  .booking-hours-row .opts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

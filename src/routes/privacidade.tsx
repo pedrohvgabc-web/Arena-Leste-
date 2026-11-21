@@ -61,6 +61,14 @@ function Page() {
         pagamento.
       </p>
       <p>
+        Se o Admin Master ativar voluntariamente as notificações, o navegador registra uma
+        assinatura neste dispositivo e o servidor encaminha um aviso de nova reserva pelo serviço de
+        push do navegador/sistema operacional. O texto do aviso contém somente nome do responsável,
+        data da reserva, unidade e intervalo de horários. Não envia valor, telefone, CPF, endereço
+        ou observações. A notificação pode aparecer na tela bloqueada; o Admin Master pode
+        desativá-la neste dispositivo pelo painel.
+      </p>
+      <p>
         Os dados de reserva são mantidos pelo tempo necessário para administrar os agendamentos e
         cumprir obrigações aplicáveis. Os dados de inscrição serão mantidos pelo período necessário
         à organização do torneio e, em regra, por até 12 meses após o evento, salvo necessidade de

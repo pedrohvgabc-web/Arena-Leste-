@@ -113,3 +113,14 @@
 - [ ] Criar a aba Master de gerenciamento de usuários para alterar nomes de login, nomes de exibição, senhas e status das contas.
 - [ ] Registrar no log toda escrita administrativa e impedir acesso direto por endpoint quando o perfil não tiver permissão.
 - [ ] Depois da conclusão dos acessos, otimizar Visão geral e Auditoria com carregamento sob demanda, agregações e paginação.
+
+
+## Solicitação atual — mobile da landing, reserva e notificações master
+
+- [x] **Mostrar todas as chamadas essenciais na primeira tela do celular** — sem rolagem inicial, o hero da landing deve mostrar “Bora pra areia?”, “Esporte de areia, time reunido e boas histórias. A gente se encontra na Arena Leste.”, o botão “Escolher meu horário”, “Ver unidades”, “Reveja suas jogadas e compartilhe” e a chamada “Alugue mais, pague menos”. Verificado em emulação mobile 375×667 e 390×844.
+- [x] **Fazer o CTA principal abrir a reserva de modo confiável** — ao tocar “Escolher meu horário”, inclusive após tentativas repetidas no iPhone e no Android, navegar para o formulário de reserva sem ficar parado. Link direto testado três vezes em cada viewport mobile; validação em aparelhos físicos continua pendente.
+- [ ] **Simplificar a reserva para diferentes celulares** — deixar o fluxo rápido de entender e responsivo a diferentes tamanhos, reduzindo a necessidade de rolar para cima e para baixo sem esconder informações essenciais.
+- [ ] **Ativar notificações de novas reservas somente para Admin Master** — adicionar, na área admin, botão de ativação visível e utilizável somente pelo admin master; depois da ativação, entregar as notificações inclusive com o site fechado, respeitando o suporte e as permissões do navegador/dispositivo.
+- [ ] **Restringir o conteúdo da notificação e o evento que a dispara** — notificar somente uma reserva nova efetivamente gravada; mostrar somente o nome da pessoa, a data/horário da reserva, a unidade “Cuniã” ou “Pinheiro Machado” e o intervalo de horas alugadas; não exibir valor.
+- [ ] **Concluir a ativação de produção com migração e VAPID** — aplicar a tabela aditiva das assinaturas em um branch de revisão do Neon, configurar as chaves VAPID como segredos do backend Render, manter chaves privadas fora do Git e testar sem gravar reservas reais nem enviar conteúdo fictício para administradores.
+- [ ] **Validar em aparelhos reais depois da autorização de publicação** — confirmar no iPhone que, após instalar a web app na Tela de Início e permitir notificações, a assinatura permanece após fechar o site; conferir também no Android. Até essa verificação, não afirmar que notificações em segundo plano foram validadas em aparelhos reais.

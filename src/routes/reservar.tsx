@@ -207,6 +207,7 @@ function Reservar() {
   const [visibleMonth, setVisibleMonth] = useState(
     () => releasedOffer?.date.slice(0, 7) ?? arenaNow().date.slice(0, 7),
   );
+  const [calendarExpanded, setCalendarExpanded] = useState(true);
 
   useEffect(() => {
     setPromoReady(true);
@@ -382,6 +383,7 @@ function Reservar() {
     setUnitId(nextUnit);
     setSpaceId(null);
     setDate(null);
+    setCalendarExpanded(true);
     setStarts([]);
     resetIdempotency();
   }
@@ -389,12 +391,14 @@ function Reservar() {
     if (id === spaceId) return;
     setSpaceId(id);
     setDate(null);
+    setCalendarExpanded(true);
     setStarts([]);
     resetIdempotency();
   }
   function chooseDate(nextDate: string) {
     setDate(nextDate);
     setVisibleMonth(nextDate.slice(0, 7));
+    setCalendarExpanded(false);
     setStarts([]);
     resetIdempotency();
   }
@@ -741,7 +745,22 @@ function Reservar() {
                 disabled={!selectedSpace || Boolean(releasedOfferId)}
               >
                 <legend className="mono">2 · Data e horários</legend>
-                {datesQuery.isLoading ? (
+                {date && !calendarExpanded ? (
+                  <div className="booking-date-summary">
+                    <p className="booking-date-summary__label">
+                      <strong>{dateLabel(date)}</strong>
+                      <span>{selectedSpace?.name ?? "Quadra selecionada"}</span>
+                    </p>
+                    <button
+                      type="button"
+                      className="btn"
+                      aria-controls="booking-calendar"
+                      onClick={() => setCalendarExpanded(true)}
+                    >
+                      Alterar data
+                    </button>
+                  </div>
+                ) : datesQuery.isLoading ? (
                   <p className="hint">
                     <LoaderCircle size={16} className="loading-icon" /> Consultando dias abertos…
                   </p>
@@ -758,7 +777,7 @@ function Reservar() {
                     </button>
                   </div>
                 ) : openDates.length ? (
-                  <div className="booking-calendar">
+                  <div className="booking-calendar" id="booking-calendar">
                     <div className="booking-calendar__header">
                       <button
                         type="button"
@@ -810,6 +829,15 @@ function Reservar() {
                     <p className="booking-calendar__legend">
                       Dias destacados estão abertos; os demais não têm grade disponível.
                     </p>
+                    {date && (
+                      <button
+                        type="button"
+                        className="btn booking-calendar__hide"
+                        onClick={() => setCalendarExpanded(false)}
+                      >
+                        Ocultar calendário
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="hint">Nenhum dia aberto está configurado para esta unidade.</p>
@@ -818,6 +846,8 @@ function Reservar() {
 
               <aside
                 className="booking-promo-summary"
+                data-booking-step="2"
+                data-active={bookingStep === 2}
                 aria-labelledby="booking-promo-summary-title"
               >
                 <div className="booking-promo-summary__inner">
@@ -851,7 +881,11 @@ function Reservar() {
                 </div>
               </aside>
 
-              <div className="booking-hours-row">
+              <div
+                className="booking-hours-row"
+                data-booking-step="2"
+                data-active={bookingStep === 2}
+              >
                 <fieldset
                   data-booking-step="2"
                   data-active={bookingStep === 2}

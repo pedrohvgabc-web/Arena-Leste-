@@ -32,6 +32,7 @@ import { ArenaSettingsAdmin } from "@/components/ArenaSettingsAdmin";
 import { CurrentBookingsAdmin } from "@/components/CurrentBookingsAdmin";
 import { AdminOverview } from "@/components/AdminOverview";
 import { AdminDataBackup } from "@/components/AdminDataBackup";
+import { MasterPushNotifications } from "@/components/MasterPushNotifications";
 import { PhotoGalleryAdmin } from "@/components/PhotoGalleryAdmin";
 import {
   ADMIN_MODULES,
@@ -327,6 +328,7 @@ function Dashboard({
             {actor.role === "master" ? "Admin Master" : actor.role === "caixa" ? "Caixa" : "Mídia"}
           </span>
         </div>
+        {actor.role === "master" && <MasterPushNotifications adminId={actor.id} />}
         <div id="admin-module-content" className="swap">
           {activeModule === "overview" && (
             <AdminOverview

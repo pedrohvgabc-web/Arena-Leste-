@@ -132,3 +132,24 @@ Integrar a nova versão enviada em `arena-leste-projeto.zip` ao site já operaci
 ### Depois desta fase
 
 Otimizar a renderização e consultas de Visão geral e Auditoria com carregamento sob demanda, consultas agregadas e paginação, conforme pedido do usuário.
+
+
+## Extensão solicitada — mobile prioritário e avisos push de reservas
+
+- **Home para celular:** manter a direção de arte existente da Arena. Reduzir navegação para duas faixas curtas; alinhar logo e botão “Agendar” na primeira faixa e os atalhos em uma linha. Encaixar no hero, sem animação de entrada que atrase o toque, o título “Bora pra areia?”, a frase institucional, “Escolher meu horário”, “Ver unidades”, “Reveja suas jogadas e compartilhe” e a chamada “Alugue mais, pague menos”. O menu flutuante de WhatsApp mantém a área de clique somente nos próprios controles; a caixa recolhida não pode bloquear o conteúdo.
+- **CTA principal:** usar destino direto `/reservar?unit=unidade-1`, com comportamento de link HTML compatível com navegação móvel; testar toque pelo Playwright nos viewports de 390×844 e 375×667.
+- **Reserva:** reduzir densidade de cabeçalho, cards, calendário e opções, mantendo conteúdo essencial. Ao selecionar uma data, recolher o calendário e exibir uma ação “Alterar data”; horários permanecem no mesmo passo, promoção segue entre data e horários, e o resumo/progresso/ações de etapa ficam acessíveis. Preservar a rolagem quando a quantidade de horários ou os campos do formulário excederem a altura útil; não truncar informação nem fingir que o cadastro completo cabe em telas baixas.
+- **PWA:** publicar `public/manifest.webmanifest` com `display: standalone`, ícone Arena já existente e `start_url` `/`; servir `public/sw.js` para receber Web Push e abrir `/admin` ao tocar na notificação. Revalidar o cache do manifesto e do service worker.
+- **Permissão e admin:** mostrar o controle push somente a contas com papel `master`; cada server function repete `requireAdminRole(["master"])`. Solicitar permissão exclusivamente após o clique explícito no botão. Permitir remover a assinatura do dispositivo; não enviar push de teste.
+- **Dados e mensagem:** após a transação criar uma reserva nova, enviar de forma tolerante a falhas somente nome, data da reserva, unidade “Cuniã” ou “Pinheiro Machado” e faixas contíguas de horas alugadas. Nunca incluir valor, telefone, CPF, endereço, observações ou campos de pagamento. Repetições idempotentes não geram um segundo aviso. Os envios dirigem-se somente a assinaturas atuais de contas Master ativas.
+- **Servidor:** armazenar endpoint e chaves da assinatura na nova migração aditiva `drizzle/migrations/0014_admin_push_subscriptions.sql`, sem modificar reservas. As chaves VAPID ficam fora do repositório e devem ser configuradas no Web Service `arena-elsinho` como `WEB_PUSH_PUBLIC_KEY` e `WEB_PUSH_PRIVATE_KEY` antes de habilitar a ativação em produção. O frontend nunca recebe a chave privada.
+- **Compatibilidade e transparência:** documentar que iOS/iPadOS 16.4 ou posterior exige o site adicionado à Tela de Início e permissão iniciada por toque; atualizar a Política de Privacidade para explicar o serviço de push do navegador e a presença possível na tela bloqueada.
+
+### Estrutura adicionada
+
+- `src/components/MasterPushNotifications.tsx`: ação master-only para habilitar/desabilitar o dispositivo e explicar a compatibilidade iOS.
+- `src/lib/admin-push.functions.ts`: server functions com autorização master para consultar/configurar/remover assinaturas.
+- `src/lib/admin-push.service.ts`: armazenamento e entrega Web Push no Node, com limpeza de endpoints expirados e sem depender do sucesso do envio para salvar a reserva.
+- `src/lib/push-notification-content.ts`: formatação pura com lista de campos permitidos e junção de intervalos contínuos.
+- `public/manifest.webmanifest` e `public/sw.js`: contrato PWA, recepção em segundo plano e abertura segura do painel ao tocar.
+- `drizzle/migrations/0014_admin_push_subscriptions.sql`: armazenamento privado e aditivo das assinaturas administrativas.

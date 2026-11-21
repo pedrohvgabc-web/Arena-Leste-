@@ -250,13 +250,9 @@ function HomePage() {
             Esporte de areia, time reunido e boas histórias. A gente se encontra na Arena Leste.
           </p>
           <div className="cta">
-            <Link
-              className="btn pri lg hero-booking-cta"
-              to="/reservar"
-              search={{ unit: "unidade-1" }}
-            >
+            <a className="btn pri lg hero-booking-cta" href="/reservar?unit=unidade-1">
               Escolher meu horário
-            </Link>
+            </a>
             <a className="btn lg" href="#unidades">
               Ver unidades
             </a>

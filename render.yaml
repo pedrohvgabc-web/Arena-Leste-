@@ -1,5 +1,5 @@
-# Frontend no CDN gratuito do Render. O backend Node arena-elsinho segue
-# inalterado e continua servindo a API pelos rewrites do novo host.
+# Frontend estático no Render. A API Node arena-elsinho é um serviço separado
+# e não tem sua configuração definida neste arquivo.
 services:
   - type: web
     runtime: static
@@ -25,6 +25,12 @@ services:
         name: Cache-Control
         value: no-cache
       - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      - path: /manifest.webmanifest
+        name: Cache-Control
+        value: no-cache
+      - path: /sw.js
         name: Cache-Control
         value: no-cache
       - path: /admin*

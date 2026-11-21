@@ -24,6 +24,7 @@ import { tournamentRegistrationSchema } from "./tournament-schema";
 import { TOURNAMENT } from "./site";
 import { arenaHolidaysForYear } from "./holidays";
 import { paymentCheckoutErrorMessage } from "./payment-errors";
+import type { ReservationPushDetails } from "./push-notification-content";
 
 type SpaceRow = {
   id: string;
@@ -547,6 +548,7 @@ export const createBooking = createServerFn({ method: "POST" })
     const privacyConsentAt = new Date().toISOString();
     const expires =
       data.method === "pix" ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null;
+    let reservationNotice: ReservationPushDetails | null = null;
     try {
       const outcome = await db.begin(async (tx) => {
         const previousInTransaction =
@@ -730,6 +732,14 @@ export const createBooking = createServerFn({ method: "POST" })
             )
           `;
         }
+        if (inserted.length) {
+          reservationNotice = {
+            name,
+            date: data.date,
+            unitId: data.unitId,
+            slots,
+          };
+        }
         await tx`
           INSERT INTO public.audit_logs (actor, action, entity, entity_id, details)
           VALUES ('public', 'booking.create', 'booking', ${inserted[0]?.id ?? null}, ${JSON.stringify({ code, slots: slots.length, promoApplied: pricing.promoApplied, totalAmountCents: pricing.totalCents, chargeAmountCents: chargeAmount, paymentPlan })}::jsonb)
@@ -738,6 +748,12 @@ export const createBooking = createServerFn({ method: "POST" })
       });
 
       if (outcome.error) return { ok: false as const, error: outcome.error };
+      if (reservationNotice) {
+        const details = reservationNotice;
+        void import("./admin-push.service")
+          .then(({ sendReservationPushToMaster }) => sendReservationPushToMaster(details))
+          .catch(() => console.warn("Não foi possível iniciar a entrega do push de reserva."));
+      }
       if (data.method === "pix" && paymentMode === "infinitepay") {
         try {
           await (

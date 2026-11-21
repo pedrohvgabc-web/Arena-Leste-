@@ -79,6 +79,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#fff9f2" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { title: "Arena Leste Multi Sports — Vôlei de praia em Porto Velho" },
       {
         name: "description",
@@ -89,6 +91,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: zipCss },
       { rel: "stylesheet", href: zipAdaptCss },
+      { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "icon", href: "/favicon.png", type: "image/png", sizes: "512x512" },
       { rel: "apple-touch-icon", href: "/favicon.png", sizes: "512x512" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
