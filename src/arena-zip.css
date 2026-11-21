@@ -2827,6 +2827,9 @@ tr:last-child td {
   line-height: 1.35;
 }
 .booking-hours-help--whatsapp {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: inline-flex;
   width: 100%;
   min-width: 0;
@@ -2848,6 +2851,49 @@ tr:last-child td {
     box-shadow 160ms ease,
     transform 160ms ease;
 }
+.booking-hours-help--whatsapp > * {
+  position: relative;
+  z-index: 1;
+}
+.booking-hours-help--whatsapp::after {
+  position: absolute;
+  z-index: 0;
+  top: -65%;
+  bottom: -65%;
+  left: -36%;
+  width: 28%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.08) 18%,
+    rgb(255 255 255 / 0.66) 50%,
+    rgb(255 255 255 / 0.08) 82%,
+    transparent
+  );
+  content: "";
+  pointer-events: none;
+  transform: translateX(-220%) skewX(-22deg);
+  animation: booking-hours-light-sweep 3.4s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
+}
+@keyframes booking-hours-light-sweep {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateX(-220%) skewX(-22deg);
+  }
+  14% {
+    opacity: 1;
+  }
+  48% {
+    opacity: 0.9;
+    transform: translateX(620%) skewX(-22deg);
+  }
+  55%,
+  100% {
+    opacity: 0;
+    transform: translateX(620%) skewX(-22deg);
+  }
+}
 .booking-hours-help--whatsapp:hover {
   border-color: #033816;
   background: #06451f;
@@ -2867,6 +2913,12 @@ tr:last-child td {
 }
 .booking-hours-whatsapp-handset {
   fill: #075a2a;
+}
+@media (prefers-reduced-motion: reduce) {
+  .booking-hours-help--whatsapp::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 @media (max-width: 48rem) {
   .booking-hours-row {
