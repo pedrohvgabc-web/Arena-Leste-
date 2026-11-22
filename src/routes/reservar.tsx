@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Check, Copy, LoaderCircle, MessageCircle, ShieldCheck, Ticket, X } from "lucide-react";
 import { SITE, waLink } from "@/lib/site";
+import { readBookingCache, writeBookingCache } from "@/lib/booking-data-cache";
 import {
   createBooking,
   getPublicPaymentConfig,
@@ -47,6 +48,39 @@ type TimeSlot = {
   end: string;
   status: "available" | "pending" | "confirmed" | "unavailable";
 };
+function isSpaceList(value: unknown): value is Space[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (space) =>
+        space &&
+        typeof space.id === "string" &&
+        typeof space.name === "string" &&
+        typeof space.sport === "string" &&
+        typeof space.slot_minutes === "number" &&
+        typeof space.price_cents === "number" &&
+        (space.unit_id === "unidade-1" || space.unit_id === "unidade-2"),
+    )
+  );
+}
+function isDateList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((date) => typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date))
+  );
+}
+function isTimeSlotList(value: unknown): value is TimeSlot[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (slot) =>
+        slot &&
+        typeof slot.start === "string" &&
+        typeof slot.end === "string" &&
+        ["available", "pending", "confirmed", "unavailable"].includes(slot.status),
+    )
+  );
+}
 type BookingResult = {
   code: string;
   date: string;
@@ -258,10 +292,20 @@ function Reservar() {
 
   const spacesQuery = useQuery({
     queryKey: ["booking-spaces"],
-    queryFn: () => fetchSpaces(),
-    staleTime: 5_000,
+    queryFn: async () => {
+      const data = (await fetchSpaces()) as Space[];
+      writeBookingCache("spaces", data);
+      return data;
+    },
+    staleTime: 0,
     retry: false,
   });
+  useEffect(() => {
+    const queryKey = ["booking-spaces"];
+    if (queryClient.getQueryData(queryKey) !== undefined) return;
+    const cached = readBookingCache("spaces", isSpaceList);
+    if (cached) queryClient.setQueryData(queryKey, cached.data, { updatedAt: cached.updatedAt });
+  }, [queryClient]);
   const spaces = useMemo(() => (spacesQuery.data ?? []) as Space[], [spacesQuery.data]);
   const unitSpaces = useMemo(
     () => spaces.filter((space) => space.unit_id === unitId),
@@ -280,10 +324,20 @@ function Reservar() {
 
   const datesQuery = useQuery({
     queryKey: ["booking-dates", unitId],
-    queryFn: () => fetchDates({ data: { unitId } }),
-    staleTime: 120_000,
+    queryFn: async () => {
+      const data = (await fetchDates({ data: { unitId } })) as string[];
+      writeBookingCache(`dates:${unitId}`, data);
+      return data;
+    },
+    staleTime: 0,
     retry: false,
   });
+  useEffect(() => {
+    const queryKey = ["booking-dates", unitId];
+    if (queryClient.getQueryData(queryKey) !== undefined) return;
+    const cached = readBookingCache(`dates:${unitId}`, isDateList);
+    if (cached) queryClient.setQueryData(queryKey, cached.data, { updatedAt: cached.updatedAt });
+  }, [queryClient, unitId]);
   const openDates = useMemo(() => datesQuery.data ?? [], [datesQuery.data]);
   const openDateSet = useMemo(() => new Set(openDates), [openDates]);
   const todayDate = arenaNow().date;
@@ -292,13 +346,26 @@ function Reservar() {
   const calendarDays = useMemo(() => calendarMonthDays(visibleMonth), [visibleMonth]);
   const availabilityQuery = useQuery({
     queryKey: ["booking-availability", spaceId, date],
-    queryFn: () => fetchAvailability({ data: { spaceId: spaceId!, date: date! } }),
+    queryFn: async () => {
+      const data = (await fetchAvailability({
+        data: { spaceId: spaceId!, date: date! },
+      })) as TimeSlot[];
+      writeBookingCache(`availability:${spaceId}:${date}`, data);
+      return data;
+    },
     enabled: Boolean(spaceId && date),
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     staleTime: 20_000,
   });
+  useEffect(() => {
+    if (!spaceId || !date) return;
+    const queryKey = ["booking-availability", spaceId, date];
+    if (queryClient.getQueryData(queryKey) !== undefined) return;
+    const cached = readBookingCache(`availability:${spaceId}:${date}`, isTimeSlotList);
+    if (cached) queryClient.setQueryData(queryKey, cached.data, { updatedAt: cached.updatedAt });
+  }, [queryClient, spaceId, date]);
   const slots = useMemo(
     () => (availabilityQuery.data ?? []) as TimeSlot[],
     [availabilityQuery.data],
@@ -708,7 +775,7 @@ function Reservar() {
                     <p className="hint">
                       <LoaderCircle size={16} className="loading-icon" /> Carregando quadras…
                     </p>
-                  ) : spacesQuery.isError ? (
+                  ) : spacesQuery.isError && !spacesQuery.data ? (
                     <div className="hint" role="alert">
                       <p>Não foi possível carregar as quadras.</p>
                       <button
@@ -774,7 +841,7 @@ function Reservar() {
                   <p className="hint">
                     <LoaderCircle size={16} className="loading-icon" /> Consultando dias abertos…
                   </p>
-                ) : datesQuery.isError ? (
+                ) : datesQuery.isError && !datesQuery.data ? (
                   <div className="hint" role="alert">
                     <p>Não foi possível consultar a agenda.</p>
                     <button
@@ -910,7 +977,7 @@ function Reservar() {
                     <p className="hint">
                       <LoaderCircle size={16} className="loading-icon" /> Consultando horários…
                     </p>
-                  ) : availabilityQuery.isError ? (
+                  ) : availabilityQuery.isError && !availabilityQuery.data ? (
                     <div className="hint" role="alert">
                       <p>Não foi possível consultar os horários deste dia.</p>
                       <button
