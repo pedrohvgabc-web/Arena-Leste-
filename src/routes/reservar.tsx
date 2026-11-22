@@ -117,19 +117,6 @@ function slotDurationMinutes(slot: { start: string; end: string }) {
 }
 
 export const Route = createFileRoute("/reservar")({
-  loaderDeps: ({ search }) => ({ offerId: search.offer, unitId: search.unit }),
-  loader: async ({ deps }) => {
-    const unitId = UNIT_IDS.includes(deps.unitId as UnitId) ? (deps.unitId as UnitId) : "unidade-1";
-    const [spaces, openDates, releasedOffers] = await Promise.all([
-      getSpaces(),
-      getPublicBookingDates({ data: { unitId } }),
-      deps.offerId ? getPublicReleasedSlotOffers() : Promise.resolve([]),
-    ]);
-    const releasedOffer = deps.offerId
-      ? (releasedOffers.find((offer) => offer.id === deps.offerId) ?? null)
-      : null;
-    return { spaces, openDates, releasedOffer };
-  },
   validateSearch: (search: Record<string, unknown>) => ({
     unit: UNIT_IDS.includes(search["unit"] as UnitId) ? (search["unit"] as UnitId) : undefined,
     ...(typeof search["offer"] === "string" &&
@@ -162,24 +149,18 @@ export const Route = createFileRoute("/reservar")({
 
 function Reservar() {
   const search = Route.useSearch();
-  const {
-    spaces: initialSpaces,
-    openDates: initialOpenDates,
-    releasedOffer,
-  } = Route.useLoaderData();
   const fetchSpaces = useServerFn(getSpaces);
   const fetchPaymentConfig = useServerFn(getPublicPaymentConfig);
   const fetchDates = useServerFn(getPublicBookingDates);
   const fetchAvailability = useServerFn(getAvailability);
+  const fetchReleasedOffers = useServerFn(getPublicReleasedSlotOffers);
   const submitBooking = useServerFn(createBooking);
   const queryClient = useQueryClient();
-  const [unitId, setUnitId] = useState<UnitId>(releasedOffer?.unitId ?? search.unit ?? "unidade-1");
-  const [spaceId, setSpaceId] = useState<string | null>(releasedOffer?.spaceId ?? null);
-  const [date, setDate] = useState<string | null>(releasedOffer?.date ?? null);
-  const [starts, setStarts] = useState<string[]>(
-    () => releasedOffer?.slots.map((slot) => slot.start) ?? [],
-  );
-  const [releasedOfferId, setReleasedOfferId] = useState<string | null>(releasedOffer?.id ?? null);
+  const [unitId, setUnitId] = useState<UnitId>(search.unit ?? "unidade-1");
+  const [spaceId, setSpaceId] = useState<string | null>(null);
+  const [date, setDate] = useState<string | null>(null);
+  const [starts, setStarts] = useState<string[]>([]);
+  const [releasedOfferId, setReleasedOfferId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
   const [idempotencyKey, setIdempotencyKey] = useState(() => globalThis.crypto.randomUUID());
   const [busy, setBusy] = useState(false);
@@ -203,11 +184,10 @@ function Reservar() {
   const promoReturnFocusRef = useRef<HTMLHeadingElement>(null);
   const cancellationDialogRef = useRef<HTMLDialogElement>(null);
   const [cancellationDialogOpen, setCancellationDialogOpen] = useState(false);
-  const [bookingStep, setBookingStep] = useState(releasedOffer ? 3 : 1);
-  const [visibleMonth, setVisibleMonth] = useState(
-    () => releasedOffer?.date.slice(0, 7) ?? arenaNow().date.slice(0, 7),
-  );
+  const [bookingStep, setBookingStep] = useState(1);
+  const [visibleMonth, setVisibleMonth] = useState(() => arenaNow().date.slice(0, 7));
   const [calendarExpanded, setCalendarExpanded] = useState(true);
+  const appliedReleasedOfferRef = useRef<string | null>(null);
 
   useEffect(() => {
     setPromoReady(true);
@@ -219,6 +199,28 @@ function Reservar() {
     staleTime: 60_000,
     retry: false,
   });
+  const releasedOffersQuery = useQuery({
+    queryKey: ["public-released-slot-offers"],
+    queryFn: () => fetchReleasedOffers(),
+    enabled: Boolean(search.offer),
+    staleTime: 10_000,
+    retry: false,
+  });
+  const releasedOffer = useMemo(
+    () => releasedOffersQuery.data?.find((offer) => offer.id === search.offer) ?? null,
+    [releasedOffersQuery.data, search.offer],
+  );
+  useEffect(() => {
+    if (!releasedOffer || appliedReleasedOfferRef.current === releasedOffer.id) return;
+    appliedReleasedOfferRef.current = releasedOffer.id;
+    setUnitId(releasedOffer.unitId);
+    setSpaceId(releasedOffer.spaceId);
+    setDate(releasedOffer.date);
+    setStarts(releasedOffer.slots.map((slot) => slot.start));
+    setReleasedOfferId(releasedOffer.id);
+    setBookingStep(3);
+    setVisibleMonth(releasedOffer.date.slice(0, 7));
+  }, [releasedOffer]);
   const paymentMode = paymentConfigQuery.data?.mode ?? null;
   useEffect(() => {
     const dialog = paymentDialogRef.current;
@@ -257,8 +259,8 @@ function Reservar() {
   const spacesQuery = useQuery({
     queryKey: ["booking-spaces"],
     queryFn: () => fetchSpaces(),
-    initialData: initialSpaces,
     staleTime: 5_000,
+    retry: false,
   });
   const spaces = useMemo(() => (spacesQuery.data ?? []) as Space[], [spacesQuery.data]);
   const unitSpaces = useMemo(
@@ -268,19 +270,19 @@ function Reservar() {
   const selectedSpace = unitSpaces.find((space) => space.id === spaceId) ?? null;
 
   useEffect(() => {
+    if (spacesQuery.isLoading) return;
     if (!unitSpaces.length) {
       setSpaceId(null);
       return;
     }
     if (!unitSpaces.some((space) => space.id === spaceId)) setSpaceId(unitSpaces[0]!.id);
-  }, [unitSpaces, spaceId]);
+  }, [spacesQuery.isLoading, unitSpaces, spaceId]);
 
   const datesQuery = useQuery({
     queryKey: ["booking-dates", unitId],
     queryFn: () => fetchDates({ data: { unitId } }),
-    initialData: unitId === (search.unit ?? "unidade-1") ? initialOpenDates : undefined,
-    enabled: unitSpaces.length > 0,
     staleTime: 120_000,
+    retry: false,
   });
   const openDates = useMemo(() => datesQuery.data ?? [], [datesQuery.data]);
   const openDateSet = useMemo(() => new Set(openDates), [openDates]);
@@ -366,7 +368,7 @@ function Reservar() {
     ? Math.max(0, paymentTotal - paymentCharge)
     : balanceDueCents;
   const releasedOfferUnavailable =
-    Boolean(search.offer && !releasedOffer) ||
+    Boolean(search.offer && !releasedOffer && !releasedOffersQuery.isLoading) ||
     Boolean(
       releasedOfferId &&
       !availabilityQuery.isLoading &&
@@ -707,9 +709,17 @@ function Reservar() {
                       <LoaderCircle size={16} className="loading-icon" /> Carregando quadras…
                     </p>
                   ) : spacesQuery.isError ? (
-                    <p className="hint" role="alert">
-                      Não foi possível carregar as quadras. Tente novamente.
-                    </p>
+                    <div className="hint" role="alert">
+                      <p>Não foi possível carregar as quadras.</p>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={spacesQuery.isFetching}
+                        onClick={() => void spacesQuery.refetch()}
+                      >
+                        {spacesQuery.isFetching ? "Tentando novamente…" : "Tentar novamente"}
+                      </button>
+                    </div>
                   ) : unitSpaces.length ? (
                     <div className="opts">
                       {unitSpaces.map((space) => (
