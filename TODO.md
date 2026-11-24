@@ -157,4 +157,4 @@
 - `pnpm test`: 66/66; builds principal e estático aprovados; ESLint e Prettier nos arquivos de código alterados e `git diff --check` aprovados.
 - A navegação e os textos foram revisados por leitura de código; a matriz Master/Caixa/Mídia é testada sem alteração, o seletor e a navegação programática filtram destinos pelo perfil. A descrição de bloqueio manual aparece somente para Master.
 - Não houve screenshot/emulação de viewport móvel nem teste em aparelho físico nesta etapa; a experiência mobile foi verificada por código e CSS responsivo, não por validação visual no dispositivo.
-- A publicação ainda depende do commit/push e da confirmação do deploy Render; não declarar a mudança publicada até verificar o resultado.
+- Commit funcional `4a916870c17c5814268c4376288e3645728faea8` enviado a `origin/main`; Render confirmou frontend `arena-leste` e backend `arena-elsinho` como `live` nesse SHA. As rotas `/` e `/admin` responderam HTTP 200 no smoke test. Esta melhoria é apenas de interface e não altera código de backend.
