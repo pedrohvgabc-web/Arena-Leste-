@@ -143,3 +143,18 @@
 - A migration `0015_manual_bookings_and_payment_confirmed_occupancy.sql` foi testada antes numa cópia temporária e, após autorização explícita, aplicada ao projeto Neon `dry-cell-33076550`, branch `br-fancy-smoke-b4zo40ec` (production); coluna, constraints, 14 grades e tarifas-base foram conferidas. Nenhuma reserva fictícia foi inserida nem pagamento feito.
 - A revisão de layout mobile foi feita por leitura de código e estilos responsivos, mas esta sessão não conseguiu emular viewport de smartphone nem validar em aparelho físico; não declarar esses testes como concluídos. O fluxo responsivo está publicado, sujeito à validação final em dispositivos reais.
 - O journal Drizzle foi preservado: o histórico local está defasado e a base não tem `__drizzle_migrations`; não executar `drizzle migrate` automático sem reconciliação explícita.
+
+## Solicitação atual — painel Admin rápido e guiado para celular
+
+- [x] **Tornar todas as áreas encontráveis sem rolagem horizontal** — no celular, mostrar um seletor de área explícito e acessível com todos os módulos autorizados ao perfil atual; manter o nome da área selecionada sempre visível e preservar o menu agrupado no desktop. Não ocultar módulos por falta de espaço nem alterar a matriz de permissões.
+- [x] **Explicar finalidade e primeiro passo em cada área** — exibir uma orientação curta e concreta dizendo o que a pessoa pode fazer na aba, como começar e quais ações/resultados importam. Cobrir Visão geral, Agenda, Reservas (incluindo bloqueio manual só do Master), Horários, Unidades e quadras, Galeria, Torneio, Contato, Dados e backup, Histórico legado, Alterações feitas e Gerenciar acessos; orientar Caixa/Mídia somente para suas áreas permitidas.
+- [x] **Substituir atalhos genéricos por tarefas compreensíveis** — na Visão geral, destacar rotas rápidas com verbos e objetivos (por exemplo, ver reservas, ajustar horários, revisar inscrições), mostrar o destino e uma descrição breve, e filtrar automaticamente pelos acessos do usuário.
+- [x] **Otimizar uso em smartphones e teclado/leitor de tela** — controles de navegação e formulários com alvos de toque adequados, foco visível, rótulos acessíveis, sem depender de deslizar abas fora da tela; manter leitura vertical e informação de sessão/perfil visível.
+- [x] **Preservar operação e limites do produto** — manter ações, validações server-side, dados, autenticação e permissões existentes; não redesenhar reservas segundo BellaSys nem modificar disponibilidade, regras de pagamento ou banco de dados nesta etapa.
+
+### Estado da validação (24/11/2026)
+
+- `pnpm test`: 66/66; builds principal e estático aprovados; ESLint e Prettier nos arquivos de código alterados e `git diff --check` aprovados.
+- A navegação e os textos foram revisados por leitura de código; a matriz Master/Caixa/Mídia é testada sem alteração, o seletor e a navegação programática filtram destinos pelo perfil. A descrição de bloqueio manual aparece somente para Master.
+- Não houve screenshot/emulação de viewport móvel nem teste em aparelho físico nesta etapa; a experiência mobile foi verificada por código e CSS responsivo, não por validação visual no dispositivo.
+- A publicação ainda depende do commit/push e da confirmação do deploy Render; não declarar a mudança publicada até verificar o resultado.

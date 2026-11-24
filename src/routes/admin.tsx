@@ -37,7 +37,9 @@ import { PhotoGalleryAdmin } from "@/components/PhotoGalleryAdmin";
 import {
   ADMIN_MODULES,
   modulesForRole,
+  moduleCapabilitiesForRole,
   type AdminModuleId,
+  type AdminModuleGroup,
   type AdminRole,
 } from "@/lib/admin-navigation";
 import { SITE } from "@/lib/site";
@@ -186,6 +188,13 @@ function formatAdminTimeRange(range: string) {
   return range.replace("24:00", "00:00");
 }
 
+const ADMIN_NAV_GROUPS: AdminModuleGroup[] = [
+  "Comece aqui",
+  "Operação diária",
+  "Arena e conteúdo",
+  "Administração",
+];
+
 function Dashboard({
   actor,
 }: {
@@ -201,7 +210,13 @@ function Dashboard({
   const [activeModule, setActiveModule] = useState<AdminModuleId>(
     allowedModules[0]?.id ?? "overview",
   );
-  const activeModuleInfo = allowedModules.find((module) => module.id === activeModule);
+  const activeModuleId = allowedModules.some((module) => module.id === activeModule)
+    ? activeModule
+    : (allowedModules[0]?.id ?? "overview");
+  const activeModuleInfo = allowedModules.find((module) => module.id === activeModuleId);
+  const navigateToModule = (moduleId: AdminModuleId) => {
+    if (allowedModules.some((module) => module.id === moduleId)) setActiveModule(moduleId);
+  };
   const fetchDay = useServerFn(adminDay);
   const update = useServerFn(adminUpdateBooking);
   const logout = useServerFn(adminLogout);
@@ -209,7 +224,7 @@ function Dashboard({
     queryKey: ["admin-day", date],
     queryFn: () => fetchDay({ data: { date } }),
     retry: false,
-    enabled: activeModule === "legacy",
+    enabled: activeModuleId === "legacy",
   });
 
   const rows = useMemo(
@@ -289,26 +304,63 @@ function Dashboard({
         </Link>
         <p className="mono">Painel administrativo</p>
         <nav id="sbn" aria-label="Módulos administrativos">
-          {allowedModules.map((module) => {
-            const Icon = module.icon;
-            const active = activeModule === module.id;
+          {ADMIN_NAV_GROUPS.map((group) => {
+            const modules = allowedModules.filter((module) => module.group === group);
+            if (!modules.length) return null;
             return (
-              <button
-                key={module.id}
-                type="button"
-                className="sbi"
-                aria-current={active ? "page" : undefined}
-                aria-controls="admin-module-content"
-                onClick={() => setActiveModule(module.id)}
-              >
-                <i aria-hidden="true">
-                  <Icon size={18} />
-                </i>
-                <span>{module.label}</span>
-              </button>
+              <div className="admin-nav-group" key={group}>
+                <span className="admin-nav-group-label">{group}</span>
+                {modules.map((module) => {
+                  const Icon = module.icon;
+                  return (
+                    <button
+                      key={module.id}
+                      type="button"
+                      className="sbi"
+                      aria-current={activeModuleId === module.id ? "page" : undefined}
+                      aria-controls="admin-module-content"
+                      onClick={() => navigateToModule(module.id)}
+                    >
+                      <i aria-hidden="true">
+                        <Icon size={18} />
+                      </i>
+                      <span>{module.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
+        <div className="admin-mobile-navigation">
+          <label htmlFor="admin-area-select">Ir para uma área</label>
+          <select
+            id="admin-area-select"
+            value={activeModuleId}
+            onChange={(event) => {
+              const selected = allowedModules.find((module) => module.id === event.target.value);
+              if (selected) navigateToModule(selected.id);
+            }}
+            aria-controls="admin-module-content"
+          >
+            {ADMIN_NAV_GROUPS.map((group) => {
+              const modules = allowedModules.filter((module) => module.group === group);
+              return modules.length ? (
+                <optgroup key={group} label={group}>
+                  {modules.map((module) => (
+                    <option key={module.id} value={module.id}>
+                      {module.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
+          </select>
+          <span>
+            {allowedModules.length}{" "}
+            {allowedModules.length === 1 ? "área disponível" : "áreas disponíveis"} no seu perfil
+          </span>
+        </div>
         <Link className="btn" to="/">
           ← Ver site
         </Link>
@@ -338,24 +390,48 @@ function Dashboard({
         </div>
         {actor.role === "master" && <MasterPushNotifications adminId={actor.id} />}
         <div id="admin-module-content" className="swap">
-          {activeModule === "overview" && (
+          {activeModuleInfo && activeModuleId !== "overview" && (
+            <section
+              className="admin-module-guide"
+              aria-label={`Orientação: ${activeModuleInfo.label}`}
+            >
+              <div className="admin-module-guide-intro">
+                <p className="admin-guide-eyebrow">
+                  {activeModuleInfo.group} · O que você pode fazer
+                </p>
+                <p className="admin-guide-description">{activeModuleInfo.description}</p>
+                <p className="admin-guide-first-step">
+                  <strong>Para começar:</strong> {activeModuleInfo.firstStep}
+                </p>
+              </div>
+              <ul className="admin-guide-actions" aria-label="Ações disponíveis nesta área">
+                {moduleCapabilitiesForRole(activeModuleInfo, actor.role).map((capability) => (
+                  <li key={capability}>{capability}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {activeModuleId === "overview" && (
             <AdminOverview
               allowedModules={allowedModules.map((module) => module.id)}
-              onNavigate={(module) => setActiveModule(module)}
+              role={actor.role}
+              onNavigate={navigateToModule}
             />
           )}
-          {activeModule === "agenda" && <CurrentBookingsAdmin view="agenda" />}
-          {activeModule === "reservations" && (
+          {activeModuleId === "agenda" && <CurrentBookingsAdmin view="agenda" />}
+          {activeModuleId === "reservations" && (
             <CurrentBookingsAdmin view="reservations" isMaster={actor.role === "master"} />
           )}
-          {activeModule === "courts" && <ArenaSettingsAdmin initialTab="courts" showTabs={false} />}
-          {activeModule === "hours" && <ArenaSettingsAdmin initialTab="hours" showTabs={false} />}
-          {activeModule === "gallery" && <PhotoGalleryAdmin />}
-          {activeModule === "tournament" && <TournamentRegistrationsAdmin />}
-          {activeModule === "backup" && <AdminDataBackup />}
-          {activeModule === "audit" && <AdminAudit />}
-          {activeModule === "users" && <AdminUsers />}
-          {activeModule === "contact" && (
+          {activeModuleId === "courts" && (
+            <ArenaSettingsAdmin initialTab="courts" showTabs={false} />
+          )}
+          {activeModuleId === "hours" && <ArenaSettingsAdmin initialTab="hours" showTabs={false} />}
+          {activeModuleId === "gallery" && <PhotoGalleryAdmin />}
+          {activeModuleId === "tournament" && <TournamentRegistrationsAdmin />}
+          {activeModuleId === "backup" && <AdminDataBackup />}
+          {activeModuleId === "audit" && <AdminAudit />}
+          {activeModuleId === "users" && <AdminUsers />}
+          {activeModuleId === "contact" && (
             <section aria-labelledby="admin-contact-heading">
               <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary">
                 Canais publicados
@@ -409,7 +485,7 @@ function Dashboard({
               </div>
             </section>
           )}
-          {activeModule === "legacy" && (
+          {activeModuleId === "legacy" && (
             <section
               className="rounded-2xl border border-border bg-card/40 p-4 sm:p-5"
               aria-labelledby="legacy-heading"
