@@ -9,14 +9,20 @@ import {
   adminSaveArenaDateOverride,
 } from "@/lib/arena.functions";
 import { arenaHolidaysForYear, type ArenaHolidayScope } from "@/lib/holidays";
-import { arenaNow, validateOpeningWindows, weekdayOf, type OpeningWindow } from "@/lib/arena-rules";
+import {
+  arenaNow,
+  suggestOpeningWindow,
+  validateOpeningWindows,
+  weekdayOf,
+  type OpeningWindow,
+} from "@/lib/arena-rules";
 
 type UnitId = "unidade-1" | "unidade-2";
 type DateOverride = { unitId: UnitId; date: string; label: string; windows: OpeningWindow[] };
 type HolidayItem = { date: string; name: string; scope: ArenaHolidayScope | "Data especial" };
 
-const WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
-const WEEKDAY_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
+const WEEKEND_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "23:00" }];
+const WEEKDAY_WINDOWS: OpeningWindow[] = [{ start: "19:00", end: "23:00" }];
 
 function dateLabel(date: string) {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -245,6 +251,11 @@ export function ArenaHolidayHoursAdmin({
             const override = overrideByDate.get(item.date);
             const isEditing = editingDate === item.date;
             const busy = savingDate === item.date;
+            const allowedWindow =
+              weekdayOf(item.date) === 0 || weekdayOf(item.date) === 6
+                ? { start: "15:00", end: "23:00" }
+                : { start: "19:00", end: "23:00" };
+            const extraWindow = suggestOpeningWindow(draftWindows, allowedWindow);
             const status = !override
               ? "Segue a grade semanal"
               : override.windows.length === 0
@@ -369,13 +380,11 @@ export function ArenaHolidayHoursAdmin({
                         {draftWindows.length < 2 && (
                           <button
                             type="button"
+                            disabled={!extraWindow}
                             onClick={() =>
-                              setDraftWindows((current) => [
-                                ...current,
-                                { start: "08:00", end: "12:00" },
-                              ])
+                              extraWindow && setDraftWindows((current) => [...current, extraWindow])
                             }
-                            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-dashed border-border px-4 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+                            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-dashed border-border px-4 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                           >
                             <Plus className="h-4 w-4" /> Adicionar intervalo
                           </button>

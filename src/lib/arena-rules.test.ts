@@ -17,6 +17,8 @@ import {
   hasFirstAndLastName,
   normalizeFullName,
   promotionalHourlyRateCents,
+  validateAdminManualRange,
+  isValidDateISO,
   type OpeningWindow,
 } from "./arena-rules";
 
@@ -78,6 +80,31 @@ describe("regras de funcionamento configuráveis", () => {
     const suggestion = suggestOpeningWindow([{ start: "17:00", end: "23:00" }]);
     expect(suggestion).toEqual({ start: "08:00", end: "12:00" });
     expect(validateOpeningWindows([{ start: "17:00", end: "23:00" }, suggestion!])).toBeNull();
+  });
+  it("mantém a seleção pública entre 19h–23h em dias úteis e 15h–23h no fim de semana", () => {
+    const weekday = [{ start: "19:00", end: "23:00" }];
+    const weekend = [{ start: "15:00", end: "23:00" }];
+    expect(validateSlot("2026-10-27", "18:00", weekday, 60, NOW).ok).toBe(false);
+    expect(validateSlot("2026-10-27", "19:00", weekday, 60, NOW).ok).toBe(true);
+    expect(validateSlot("2026-10-27", "22:00", weekday, 60, NOW).ok).toBe(true);
+    expect(validateSlot("2026-10-27", "23:00", weekday, 60, NOW).ok).toBe(false);
+    expect(validateSlot("2026-10-24", "14:00", weekend, 60, NOW).ok).toBe(false);
+    expect(validateSlot("2026-10-24", "15:00", weekend, 60, NOW).ok).toBe(true);
+    expect(validateSlot("2026-10-24", "22:00", weekend, 60, NOW).ok).toBe(true);
+  });
+  it("sugere intervalos semanais somente dentro da janela comercial daquele dia", () => {
+    expect(
+      suggestOpeningWindow([{ start: "19:00", end: "21:00" }], { start: "19:00", end: "23:00" }),
+    ).toEqual({
+      start: "21:00",
+      end: "23:00",
+    });
+    expect(
+      suggestOpeningWindow([{ start: "19:00", end: "23:00" }], { start: "19:00", end: "23:00" }),
+    ).toBeNull();
+    expect(
+      suggestOpeningWindow([{ start: "15:00", end: "23:00" }], { start: "15:00", end: "23:00" }),
+    ).toBeNull();
   });
   it("rejeita intervalos sobrepostos antes de salvar", () => {
     expect(
@@ -157,6 +184,22 @@ describe("regras de funcionamento configuráveis", () => {
     expect(validateSlot("2026-02-30", "14:00", TUESDAY, 60, NOW).ok).toBe(false);
     expect(validateSlot("2026-10-27", "24:00", TUESDAY, 60, NOW).ok).toBe(false);
   });
+  it("valida reservas manuais entre 13:00 e 24:00 em incrementos de 15 minutos", () => {
+    expect(isValidDateISO("2026-02-28")).toBe(true);
+    expect(isValidDateISO("2026-02-30")).toBe(false);
+    expect(validateAdminManualRange("13:00", "24:00")).toEqual({
+      ok: true,
+      durationMinutes: 660,
+    });
+    expect(validateAdminManualRange("13:15", "14:45")).toEqual({
+      ok: true,
+      durationMinutes: 90,
+    });
+    expect(validateAdminManualRange("12:45", "14:00").ok).toBe(false);
+    expect(validateAdminManualRange("23:45", "24:15").ok).toBe(false);
+    expect(validateAdminManualRange("14:00", "14:00").ok).toBe(false);
+    expect(validateAdminManualRange("13:01", "14:00").ok).toBe(false);
+  });
 });
 
 describe("preço normal e promoção de reservas", () => {
@@ -174,12 +217,12 @@ describe("preço normal e promoção de reservas", () => {
   });
   it("aplica R$40/h de domingo a quarta acima de duas horas no Pix", () => {
     expect(promotionalHourlyRateCents("2026-11-15", "pix", 180)).toBe(4_000);
-    expect(calculateBookingPrice(5_000, 60, 1, "2026-11-17", "card_onsite", 120)).toEqual({
-      perSlotCents: 10_000,
-      totalCents: 10_000,
+    expect(calculateBookingPrice(6_000, 60, 1, "2026-11-17", "card_onsite", 120)).toEqual({
+      perSlotCents: 12_000,
+      totalCents: 12_000,
       promoApplied: false,
     });
-    expect(calculateBookingPrice(5_000, 60, 2, "2026-11-17", "pix", 240)).toEqual({
+    expect(calculateBookingPrice(6_000, 60, 2, "2026-11-17", "pix", 240)).toEqual({
       perSlotCents: 8_000,
       totalCents: 16_000,
       promoApplied: true,
@@ -198,7 +241,7 @@ describe("preço normal e promoção de reservas", () => {
       totalCents: 15_001,
       promoApplied: false,
     });
-    expect(calculateBookingPrice(5_000, 60, 3, "2026-11-15", "pix")).toEqual({
+    expect(calculateBookingPrice(6_000, 60, 3, "2026-11-15", "pix")).toEqual({
       perSlotCents: 4_000,
       totalCents: 12_000,
       promoApplied: true,
@@ -207,18 +250,18 @@ describe("preço normal e promoção de reservas", () => {
 
   it("cobra R$90 por duas horas nas faixas 19–21 e 21–23 de quinta a sábado no Pix ou dinheiro", () => {
     expect(
-      calculateBookingPrice(5_000, 60, 2, "2026-11-19", "pix", 120, ["19:00", "20:00"]),
+      calculateBookingPrice(6_000, 60, 2, "2026-11-19", "pix", 120, ["19:00", "20:00"]),
     ).toEqual({ perSlotCents: 4_500, totalCents: 9_000, promoApplied: true });
     expect(
-      calculateBookingPrice(5_000, 60, 2, "2026-11-21", "cash_onsite", 120, ["21:00", "22:00"]),
+      calculateBookingPrice(6_000, 60, 2, "2026-11-21", "cash_onsite", 120, ["21:00", "22:00"]),
     ).toEqual({ perSlotCents: 4_500, totalCents: 9_000, promoApplied: true });
     expect(
-      calculateBookingPrice(5_000, 60, 2, "2026-11-19", "pix", 120, ["18:00", "19:00"]).totalCents,
-    ).toBe(10_000);
+      calculateBookingPrice(6_000, 60, 2, "2026-11-19", "pix", 120, ["18:00", "19:00"]).totalCents,
+    ).toBe(12_000);
     expect(
-      calculateBookingPrice(5_000, 60, 2, "2026-11-19", "card_onsite", 120, ["19:00", "20:00"])
+      calculateBookingPrice(6_000, 60, 2, "2026-11-19", "card_onsite", 120, ["19:00", "20:00"])
         .totalCents,
-    ).toBe(10_000);
+    ).toBe(12_000);
   });
 
   it("não dá desconto a dois slots de 30 min que somam exatamente uma hora", () => {
@@ -242,7 +285,7 @@ describe("preço normal e promoção de reservas", () => {
     });
   });
 
-  it("não eleva uma tarifa configurada abaixo de R$50/h", () => {
+  it("mantém uma tarifa configurada abaixo de R$60/h quando não há promoção elegível", () => {
     expect(calculateBookingPrice(4_000, 60, 2)).toEqual({
       perSlotCents: 4_000,
       totalCents: 8_000,

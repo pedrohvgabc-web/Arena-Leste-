@@ -1,6 +1,6 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   AlertTriangle,
   Check,
@@ -9,11 +9,19 @@ import {
   Clock3,
   Loader2,
   MessageCircle,
+  Plus,
   Search,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { adminCurrentBookings, adminCurrentDay, adminUpdateBooking } from "@/lib/arena.functions";
+import { SITE } from "@/lib/site";
+import {
+  adminArenaSettings,
+  adminCreateManualBooking,
+  adminCurrentBookings,
+  adminCurrentDay,
+  adminUpdateBooking,
+} from "@/lib/arena.functions";
 import {
   arenaNow,
   formatBRL,
@@ -21,6 +29,9 @@ import {
   PAYMENT_LABEL,
   STATUS_LABEL,
   verifiedPaymentAmountCents,
+  toHHMM,
+  toMin,
+  validateAdminManualRange,
   type PaymentMethod,
   type PaymentStatus,
 } from "@/lib/arena-rules";
@@ -37,6 +48,7 @@ type BookingRow = {
   phone: string;
   payment_method: PaymentMethod;
   payment_status: PaymentStatus;
+  is_admin_manual?: boolean;
   payment_provider: string | null;
   provider_payment_status: string | null;
   provider_capture_method: string | null;
@@ -58,6 +70,7 @@ type BookingGroup = {
   unitId: UnitId;
   spaceName: string;
   paymentLabel: string;
+  isAdminManual: boolean;
   status: PaymentStatus;
   paymentNeedsReview: boolean;
   amountCents: number;
@@ -117,14 +130,17 @@ function groupBookings(rows: BookingRow[]): BookingGroup[] {
               : statuses.includes("failed")
                 ? "failed"
                 : first.payment_status;
+      const isAdminManual = items.some((row) => row.is_admin_manual === true);
       const paymentNeedsReview =
+        !isAdminManual &&
         first.payment_provider === "infinitepay" &&
         items.some((row) => row.provider_payment_status === "paid") &&
         status !== "paid";
       const captureMethod =
         items.find((row) => row.provider_capture_method)?.provider_capture_method ?? null;
-      const paymentLabel =
-        first.payment_provider === "infinitepay"
+      const paymentLabel = isAdminManual
+        ? "Reserva manual · sem pagamento"
+        : first.payment_provider === "infinitepay"
           ? captureMethod === "pix"
             ? "Pix · InfinitePay"
             : captureMethod === "credit_card"
@@ -158,6 +174,7 @@ function groupBookings(rows: BookingRow[]): BookingGroup[] {
         unitId: first.unit_id,
         spaceName: `Unidade ${unitNumber} · ${first.space_name}`,
         paymentLabel,
+        isAdminManual,
         status,
         paymentNeedsReview,
         amountCents,
@@ -187,9 +204,22 @@ function formatBookingWeekday(iso: string) {
   }).format(new Date(`${iso}T12:00:00Z`));
 }
 
-export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "reservations" }) {
+const MANUAL_START_OPTIONS = Array.from({ length: 44 }, (_, index) => toHHMM(13 * 60 + index * 15));
+const MANUAL_END_OPTIONS = Array.from({ length: 44 }, (_, index) =>
+  toHHMM(13 * 60 + (index + 1) * 15),
+);
+
+export function CurrentBookingsAdmin({
+  view = "agenda",
+  isMaster = false,
+}: {
+  view?: "agenda" | "reservations";
+  isMaster?: boolean;
+}) {
   const fetchCurrentDay = useServerFn(adminCurrentDay);
   const fetchCurrentBookings = useServerFn(adminCurrentBookings);
+  const fetchArenaSettings = useServerFn(adminArenaSettings);
+  const createManual = useServerFn(adminCreateManualBooking);
   const updateBooking = useServerFn(adminUpdateBooking);
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => arenaNow().date);
@@ -198,6 +228,29 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
   const cancelDialogRef = useRef<HTMLDialogElement>(null);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | "all">("all");
+  const [manualUnitId, setManualUnitId] = useState<UnitId>("unidade-1");
+  const [manualSpaceId, setManualSpaceId] = useState("");
+  const [manualDate, setManualDate] = useState(() => arenaNow().date);
+  const [manualStart, setManualStart] = useState("13:00");
+  const [manualEnd, setManualEnd] = useState("14:00");
+  const [manualName, setManualName] = useState("");
+  const [manualPhone, setManualPhone] = useState("");
+  const [creatingManual, setCreatingManual] = useState(false);
+  const arenaSettingsQuery = useQuery({
+    queryKey: ["admin-arena-settings"],
+    queryFn: () => fetchArenaSettings(),
+    enabled: view === "reservations" && isMaster,
+    retry: false,
+  });
+  const manualSpaces = useMemo(
+    () => arenaSettingsQuery.data?.spaces.filter((space) => space.unitId === manualUnitId) ?? [],
+    [arenaSettingsQuery.data?.spaces, manualUnitId],
+  );
+  useEffect(() => {
+    if (manualSpaces.length && !manualSpaces.some((space) => space.id === manualSpaceId)) {
+      setManualSpaceId(manualSpaces[0]!.id);
+    }
+  }, [manualSpaces, manualSpaceId]);
   const rangeStart = arenaNow().date;
   const rangeEnd = shiftDate(rangeStart, 60);
   const query = useQuery({
@@ -223,7 +276,8 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
     if (!cancelBookingToConfirm && dialog.open) dialog.close();
   }, [cancelBookingToConfirm]);
   const attentionRequired = groups.filter(
-    (booking) => booking.status === "pending" || booking.paymentNeedsReview,
+    (booking) =>
+      !booking.isAdminManual && (booking.status === "pending" || booking.paymentNeedsReview),
   ).length;
   const confirmed = groups.filter((booking) => booking.status === "paid").length;
   const paidAmount = groups.reduce((sum, booking) => sum + booking.receivedAmountCents, 0);
@@ -303,6 +357,57 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
     }
   }
 
+  async function submitManualBooking(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const range = validateAdminManualRange(manualStart, manualEnd);
+    if (!range.ok) {
+      toast.error(range.reason);
+      return;
+    }
+    if (!manualSpaceId) {
+      toast.error("Selecione uma quadra.");
+      return;
+    }
+    setCreatingManual(true);
+    try {
+      const result = await createManual({
+        data: {
+          unitId: manualUnitId,
+          spaceId: manualSpaceId,
+          date: manualDate,
+          start: manualStart,
+          end: manualEnd,
+          name: manualName,
+          phone: manualPhone,
+        },
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      if (result.pendingCheckoutCount > 0) {
+        toast.warning(
+          `Bloqueio criado (${result.bookingCode}). Há ${result.pendingCheckoutCount} checkout(s) pendente(s) nesse intervalo; qualquer pagamento validado depois ficará para revisão e eventual estorno manual.`,
+          { duration: 9000 },
+        );
+      } else {
+        toast.success(`Reserva manual criada e bloqueada (${result.bookingCode}).`);
+      }
+      setManualName("");
+      setManualPhone("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin-current-day"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-current-bookings"] }),
+        queryClient.invalidateQueries({ queryKey: ["admin-dashboard-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["booking-availability"] }),
+      ]);
+    } catch {
+      toast.error("Não foi possível criar a reserva manual.");
+    } finally {
+      setCreatingManual(false);
+    }
+  }
+
   const dateText = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",
     day: "numeric",
@@ -326,12 +431,12 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
               id="current-bookings-heading"
               className="mt-1 font-display text-3xl font-bold uppercase"
             >
-              {view === "agenda" ? "Agenda" : "Reservas online"}
+              {view === "agenda" ? "Agenda" : "Reservas"}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {view === "agenda"
                 ? "Acompanhe as reservas do dia por unidade, quadra e horário."
-                : "Pesquise e filtre as reservas online dos próximos 60 dias."}
+                : "Pesquise reservas online e bloqueios manuais nos próximos 60 dias."}
             </p>
           </div>
           {view === "agenda" ? (
@@ -395,7 +500,7 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
             <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {[
                 ["Reservas", String(groups.length)],
-                ["Aguardando pagamento/revisão", String(attentionRequired)],
+                ["Checkouts pendentes/revisão", String(attentionRequired)],
                 ["Confirmadas", String(confirmed)],
                 ["Recebido · verificado", formatBRL(paidAmount)],
               ].map(([label, value]) => (
@@ -408,6 +513,172 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
                 </div>
               ))}
             </div>
+            {view === "reservations" && isMaster && (
+              <section
+                className="mb-6 rounded-2xl border border-primary/35 bg-primary/5 p-4 sm:p-5"
+                aria-labelledby="manual-booking-heading"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                    <Plus className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <h3
+                      id="manual-booking-heading"
+                      className="font-display text-xl font-bold uppercase"
+                    >
+                      Criar reserva manual
+                    </h3>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      Exclusivo do Admin Master. O bloqueio entra na agenda imediatamente, sem criar
+                      cobrança nem registrar pagamento.
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs leading-relaxed text-warning">
+                  Se houver um checkout público em andamento para o mesmo horário, um pagamento
+                  validado depois ficará para revisão e eventual estorno manual.
+                </p>
+                {arenaSettingsQuery.isError ? (
+                  <p role="alert" className="mt-3 text-sm text-destructive">
+                    Não foi possível carregar as quadras. Atualize a aba e tente novamente.
+                  </p>
+                ) : (
+                  <form
+                    onSubmit={submitManualBooking}
+                    className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
+                  >
+                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Unidade
+                      <select
+                        value={manualUnitId}
+                        onChange={(event) => setManualUnitId(event.target.value as UnitId)}
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
+                      >
+                        {SITE.units.map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Quadra
+                      <select
+                        required
+                        value={manualSpaceId}
+                        onChange={(event) => setManualSpaceId(event.target.value)}
+                        disabled={arenaSettingsQuery.isLoading || manualSpaces.length === 0}
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground disabled:opacity-60"
+                      >
+                        {manualSpaces.length ? (
+                          manualSpaces.map((space) => (
+                            <option key={space.id} value={space.id}>
+                              {space.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">Nenhuma quadra cadastrada</option>
+                        )}
+                      </select>
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Data
+                      <input
+                        required
+                        type="date"
+                        min={rangeStart}
+                        value={manualDate}
+                        onChange={(event) => setManualDate(event.target.value)}
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
+                      />
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Início
+                      <select
+                        value={manualStart}
+                        onChange={(event) => {
+                          const nextStart = event.target.value;
+                          setManualStart(nextStart);
+                          if (toMin(manualEnd) <= toMin(nextStart)) {
+                            setManualEnd(
+                              MANUAL_END_OPTIONS.find((time) => toMin(time) > toMin(nextStart)) ??
+                                "24:00",
+                            );
+                          }
+                        }}
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
+                      >
+                        {MANUAL_START_OPTIONS.map((time) => (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Término
+                      <select
+                        value={manualEnd}
+                        onChange={(event) => setManualEnd(event.target.value)}
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
+                      >
+                        {MANUAL_END_OPTIONS.filter((time) => toMin(time) > toMin(manualStart)).map(
+                          (time) => (
+                            <option key={time} value={time}>
+                              {time}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Nome
+                      <input
+                        required
+                        minLength={2}
+                        maxLength={80}
+                        value={manualName}
+                        onChange={(event) => setManualName(event.target.value)}
+                        autoComplete="name"
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
+                      />
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Telefone / WhatsApp
+                      <input
+                        required
+                        type="tel"
+                        maxLength={30}
+                        value={manualPhone}
+                        onChange={(event) => setManualPhone(event.target.value)}
+                        autoComplete="tel"
+                        placeholder="(69) 99999-1234"
+                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground placeholder:text-muted-foreground"
+                      />
+                    </label>
+                    <div className="flex items-end sm:col-span-2 xl:col-span-4">
+                      <button
+                        type="submit"
+                        disabled={
+                          creatingManual ||
+                          arenaSettingsQuery.isLoading ||
+                          manualSpaces.length === 0
+                        }
+                        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                      >
+                        {creatingManual ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Plus className="h-4 w-4" />
+                        )}
+                        Criar e bloquear horário
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </section>
+            )}
             {view === "reservations" && (
               <div className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_13rem]">
                 <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
@@ -450,10 +721,10 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
               <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center">
                 <Clock3 className="mx-auto h-6 w-6 text-muted-foreground" />
                 <p className="mt-3 font-semibold">
-                  Nenhuma reserva online {view === "agenda" ? "nesta data" : "neste período"}
+                  Nenhuma reserva {view === "agenda" ? "nesta data" : "neste período"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  As reservas das duas unidades aparecerão aqui depois de concluídas.
+                  Reservas confirmadas, checkouts e bloqueios manuais aparecerão aqui.
                 </p>
               </div>
             ) : filteredGroups.length === 0 ? (
@@ -467,13 +738,15 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
                     booking.amountCents,
                     booking.receivedAmountCents,
                   );
-                  const statusLabel = booking.paymentNeedsReview
-                    ? "Pagamento recebido · revisar"
-                    : booking.paymentLabel.includes("InfinitePay") &&
-                        booking.status === "paid" &&
-                        booking.balanceDueCents > 0
-                      ? `Falta pagar ${paymentProgress.remainingPercentage}%`
-                      : STATUS_LABEL[booking.status];
+                  const statusLabel = booking.isAdminManual
+                    ? "Bloqueio manual · ativo"
+                    : booking.paymentNeedsReview
+                      ? "Pagamento recebido · revisar"
+                      : booking.paymentLabel.includes("InfinitePay") &&
+                          booking.status === "paid" &&
+                          booking.balanceDueCents > 0
+                        ? `Falta pagar ${paymentProgress.remainingPercentage}%`
+                        : STATUS_LABEL[booking.status];
                   const unitNumber = booking.unitId === "unidade-1" ? "1" : "2";
                   const message = `Olá, ${booking.name.split(" ")[0]}, sobre a sua reserva na Arena Leste ${unitNumber}, ${formatBookingWeekday(booking.date)}, dia ${booking.date.split("-").reverse().join("/")}, das ${formatSlotRanges(booking.slots)}.`;
                   return (
@@ -493,7 +766,7 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
                           </p>
                         </div>
                         <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${BADGE[booking.status]}`}
+                          className={`rounded-full px-3 py-1 text-xs font-bold ${booking.isAdminManual ? "bg-primary/10 text-primary" : BADGE[booking.status]}`}
                         >
                           {statusLabel}
                         </span>
@@ -512,15 +785,18 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
                         <div>
                           <strong className="font-display text-xl">
-                            Reserva: {formatBRL(booking.amountCents)}
+                            {booking.isAdminManual
+                              ? "Bloqueio manual · sem pagamento"
+                              : `Reserva: ${formatBRL(booking.amountCents)}`}
                           </strong>
-                          {booking.paymentLabel.includes("InfinitePay") ? (
+                          {!booking.isAdminManual &&
+                          booking.paymentLabel.includes("InfinitePay") ? (
                             <p className="mt-1 text-xs text-muted-foreground">
                               {booking.receivedAmountCents > 0
                                 ? `${booking.paymentNeedsReview ? "Pagamento recebido · revisão necessária" : `Recebido ${paymentProgress.receivedPercentage}%`}: ${formatBRL(booking.receivedAmountCents)}${booking.balanceDueCents > 0 ? ` · Falta pagar ${paymentProgress.remainingPercentage}% do valor da reserva: ${formatBRL(booking.balanceDueCents)}` : " · Pago integralmente"}`
                                 : `Cobrança pendente: ${formatBRL(booking.chargeAmountCents)} · total: ${formatBRL(booking.amountCents)} · após a cobrança, restará ${formatBRL(booking.expectedBalanceDueCents)}`}
                             </p>
-                          ) : booking.balanceDueCents > 0 ? (
+                          ) : !booking.isAdminManual && booking.balanceDueCents > 0 ? (
                             <p className="mt-1 text-xs text-muted-foreground">
                               {booking.receivedAmountCents > 0
                                 ? "Entrada recebida"
@@ -539,7 +815,7 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
                           >
                             <MessageCircle className="h-4 w-4" /> Contatar
                           </a>
-                          {booking.paymentNeedsReview && (
+                          {!booking.isAdminManual && booking.paymentNeedsReview && (
                             <button
                               type="button"
                               disabled={working === booking.code}
@@ -554,21 +830,23 @@ export function CurrentBookingsAdmin({ view = "agenda" }: { view?: "agenda" | "r
                               Confirmar reserva após revisão
                             </button>
                           )}
-                          {booking.status === "pending" && !booking.paymentNeedsReview && (
-                            <button
-                              type="button"
-                              disabled={working === booking.code}
-                              onClick={() => act(booking, "mark_paid")}
-                              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-bold text-success-foreground disabled:opacity-50"
-                            >
-                              {working === booking.code ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Check className="h-4 w-4" />
-                              )}{" "}
-                              Confirmar pagamento
-                            </button>
-                          )}
+                          {booking.status === "pending" &&
+                            !booking.paymentNeedsReview &&
+                            !booking.isAdminManual && (
+                              <button
+                                type="button"
+                                disabled={working === booking.code}
+                                onClick={() => act(booking, "mark_paid")}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-bold text-success-foreground disabled:opacity-50"
+                              >
+                                {working === booking.code ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="h-4 w-4" />
+                                )}{" "}
+                                Confirmar pagamento
+                              </button>
+                            )}
                           {(booking.status === "pending" || booking.status === "paid") && (
                             <button
                               type="button"

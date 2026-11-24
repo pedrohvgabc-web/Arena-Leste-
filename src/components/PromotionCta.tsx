@@ -49,24 +49,28 @@ export function PromotionCta() {
         >
           <X size={19} aria-hidden="true" />
         </button>
-        <span className="booking-promo-dialog__stamp">ATÉ R$ 40 / HORA</span>
+        <span className="booking-promo-dialog__stamp">
+          BASE R$ 60/H · PROMO A PARTIR DE R$ 40/H
+        </span>
         <span className="mono">ARENA LESTE · PROMOÇÃO ESPECIAL</span>
         <h2 id="landing-promo-title">Mais tempo na areia</h2>
         <p id="landing-promo-description">
-          Alugue acima de 2 horas pagando no Pix ou dinheiro e ative a tarifa especial.
+          Na tarifa promocional, pague menos por hora no Pix ou dinheiro. Veja as regras sem letras
+          miúdas:
         </p>
         <ul className="booking-promo-dialog__rules">
           <li>
-            <b>Domingo a quarta:</b> 18–19 R$40 · 19–21 R$80 · 21–23 R$80 · 23–00 R$40
+            <b>Acima de 2 horas:</b> domingo a quarta, R$40/h; quinta a sábado, R$45/h.
           </li>
           <li>
-            <b>Quinta a sábado:</b> 18–19 R$50 · 19–21 R$100 · 21–23 R$100 · 23–00 R$50
+            <b>Exatamente 2 horas:</b> quinta a sábado, 19h–21h ou 21h–23h por R$90 no total.
           </li>
           <li>
-            <b>Acima de 2 horas:</b> R$40/h de domingo a quarta ou R$45/h de quinta a sábado.
+            A tarifa promocional vale para Pix ou dinheiro; outras formas seguem o preço normal.
           </li>
           <li>
-            O desconto de 10% corresponde à tarifa de R$45/h de quinta a sábado no Pix ou dinheiro.
+            Horários públicos: segunda a sexta, 19h–23h; sábado e domingo, 15h–23h. Tarifa base:
+            R$60/h.
           </li>
         </ul>
         <Link

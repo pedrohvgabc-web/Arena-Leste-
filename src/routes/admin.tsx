@@ -201,6 +201,7 @@ function Dashboard({
   const [activeModule, setActiveModule] = useState<AdminModuleId>(
     allowedModules[0]?.id ?? "overview",
   );
+  const activeModuleInfo = allowedModules.find((module) => module.id === activeModule);
   const fetchDay = useServerFn(adminDay);
   const update = useServerFn(adminUpdateBooking);
   const logout = useServerFn(adminLogout);
@@ -324,7 +325,12 @@ function Dashboard({
       </aside>
       <main id="conteudo" className="am">
         <div className="admin-topbar flex flex-wrap items-center justify-between gap-3">
-          <span className="mono">Arena Leste · Operação online</span>
+          <div className="min-w-0">
+            <span className="mono block">Arena Leste · Operação online</span>
+            <span className="admin-current-module block truncate font-display text-xl font-bold uppercase">
+              {activeModuleInfo?.label ?? "Painel"}
+            </span>
+          </div>
           <span className="mono text-primary">
             {actor.name} ·{" "}
             {actor.role === "master" ? "Admin Master" : actor.role === "caixa" ? "Caixa" : "Mídia"}
@@ -339,7 +345,9 @@ function Dashboard({
             />
           )}
           {activeModule === "agenda" && <CurrentBookingsAdmin view="agenda" />}
-          {activeModule === "reservations" && <CurrentBookingsAdmin view="reservations" />}
+          {activeModule === "reservations" && (
+            <CurrentBookingsAdmin view="reservations" isMaster={actor.role === "master"} />
+          )}
           {activeModule === "courts" && <ArenaSettingsAdmin initialTab="courts" showTabs={false} />}
           {activeModule === "hours" && <ArenaSettingsAdmin initialTab="hours" showTabs={false} />}
           {activeModule === "gallery" && <PhotoGalleryAdmin />}
@@ -767,7 +775,7 @@ function AdminAudit() {
             <option value="login">Entradas no sistema</option>
           </select>
         </label>
-        <div className="flex gap-2 sm:col-span-4 sm:justify-end">
+        <div className="flex flex-col gap-2 sm:col-span-4 sm:flex-row sm:justify-end">
           <button
             type="button"
             className="btn"
@@ -784,7 +792,23 @@ function AdminAudit() {
           </button>
         </div>
       </div>
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
+      {query.error && (
+        <div
+          role="alert"
+          className="mt-5 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm"
+        >
+          <p>Não foi possível carregar as alterações. Confira a conexão e tente novamente.</p>
+          <button
+            type="button"
+            className="mt-3 min-h-10 rounded-lg border border-border px-3 font-semibold"
+            onClick={() => void query.refetch()}
+            disabled={query.isFetching}
+          >
+            {query.isFetching ? "Tentando novamente…" : "Tentar novamente"}
+          </button>
+        </div>
+      )}
+      <div className="admin-desktop-list mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
@@ -817,9 +841,72 @@ function AdminAudit() {
           </p>
         )}
       </div>
+      <div className="mt-4 grid gap-3 sm:hidden">
+        {query.isLoading ? (
+          <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
+            Carregando alterações…
+          </p>
+        ) : rows.length === 0 && !query.error ? (
+          <p className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+            Nenhuma alteração registrada para estes filtros.
+          </p>
+        ) : (
+          rows.map((row) => (
+            <article key={row.id} className="min-w-0 rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="break-words font-semibold">{row.actor}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {new Date(row.created_at).toLocaleString("pt-BR")}
+                  </p>
+                </div>
+                <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+                  {auditPlace(row)}
+                </span>
+              </div>
+              <p className="mt-3 font-semibold">{auditAction(row.action)}</p>
+              <p className="mt-1 break-words text-sm leading-relaxed text-muted-foreground">
+                {auditDetails(row.details)}
+              </p>
+            </article>
+          ))
+        )}
+      </div>
     </section>
   );
 }
+
+type AdminUserRecord = {
+  id: string;
+  username: string;
+  display_name: string;
+  role: "master" | "caixa" | "midia";
+  active: boolean;
+};
+type AdminUserDraft = {
+  id?: string;
+  username: string;
+  displayName: string;
+  role: AdminUserRecord["role"];
+  password: string;
+  active: boolean;
+};
+type WmsUserRecord = {
+  id: string;
+  username: string;
+  display_name: string;
+  role: "admin_remote" | "caixa_local";
+  active: boolean;
+};
+type WmsUserDraft = {
+  id?: string;
+  username: string;
+  displayName: string;
+  password: string;
+  role: WmsUserRecord["role"];
+  active: boolean;
+  permissions: string[];
+};
 
 function AdminUsers() {
   const fetchUsers = useServerFn(adminUsers);
@@ -833,9 +920,9 @@ function AdminUsers() {
     queryFn: () => fetchWmsUsers(),
     retry: false,
   });
-  const [editing, setEditing] = useState<any>(null);
-  const [editingWms, setEditingWms] = useState<any>(null);
-  const users = (query.data ?? []) as Array<any>;
+  const [editing, setEditing] = useState<AdminUserDraft | null>(null);
+  const [editingWms, setEditingWms] = useState<WmsUserDraft | null>(null);
+  const users = (query.data ?? []) as AdminUserRecord[];
   async function save() {
     if (!editing) return;
     try {
@@ -898,7 +985,9 @@ function AdminUsers() {
             <select
               className="login-input mt-1"
               value={editing.role}
-              onChange={(e) => setEditing({ ...editing, role: e.target.value })}
+              onChange={(e) =>
+                setEditing({ ...editing, role: e.target.value as AdminUserDraft["role"] })
+              }
             >
               <option value="caixa">Caixa</option>
               <option value="midia">Mídia</option>
@@ -932,7 +1021,7 @@ function AdminUsers() {
           </div>
         </div>
       )}
-      <div className="mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
+      <div className="admin-desktop-list mt-6 overflow-x-auto rounded-2xl border border-border bg-card">
         <table className="w-full min-w-[650px] text-left text-sm">
           <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
@@ -968,7 +1057,6 @@ function AdminUsers() {
                         role: user.role,
                         password: "",
                         active: user.active,
-                        permissions: user.tab_permissions ?? ["balcao"],
                       })
                     }
                   >
@@ -979,6 +1067,58 @@ function AdminUsers() {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="mt-4 grid gap-3 sm:hidden">
+        {query.isLoading ? (
+          <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
+            Carregando acessos…
+          </p>
+        ) : users.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+            Nenhum acesso cadastrado.
+          </p>
+        ) : (
+          users.map((user) => (
+            <article key={user.id} className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-all font-mono text-sm font-semibold">{user.username}</p>
+                  <p className="mt-1 break-words">{user.display_name}</p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${user.active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}
+                >
+                  {user.active ? "Ativo" : "Inativo"}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+                <span className="text-sm text-muted-foreground">
+                  {user.role === "master"
+                    ? "Admin Master"
+                    : user.role === "caixa"
+                      ? "Caixa"
+                      : "Mídia"}
+                </span>
+                <button
+                  type="button"
+                  className="min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-primary"
+                  onClick={() =>
+                    setEditing({
+                      id: user.id,
+                      username: user.username,
+                      displayName: user.display_name,
+                      role: user.role,
+                      password: "",
+                      active: user.active,
+                    })
+                  }
+                >
+                  Editar acesso
+                </button>
+              </div>
+            </article>
+          ))
+        )}
       </div>
       <div className="mt-10 border-t border-border pt-8">
         <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary">
@@ -1037,7 +1177,9 @@ function AdminUsers() {
               <select
                 className="login-input mt-1"
                 value={editingWms.role}
-                onChange={(e) => setEditingWms({ ...editingWms, role: e.target.value })}
+                onChange={(e) =>
+                  setEditingWms({ ...editingWms, role: e.target.value as WmsUserDraft["role"] })
+                }
               >
                 <option value="caixa_local">Caixa local</option>
                 <option value="admin_remote">Admin remoto</option>
@@ -1074,7 +1216,7 @@ function AdminUsers() {
                           ...editingWms,
                           permissions: e.target.checked
                             ? [...(editingWms.permissions ?? []), key]
-                            : (editingWms.permissions ?? []).filter((item: string) => item !== key),
+                            : (editingWms.permissions ?? []).filter((item) => item !== key),
                         })
                       }
                     />
@@ -1112,7 +1254,7 @@ function AdminUsers() {
             </div>
           </div>
         )}
-        <div className="mt-5 overflow-x-auto rounded-2xl border border-border bg-card">
+        <div className="admin-desktop-list mt-5 overflow-x-auto rounded-2xl border border-border bg-card">
           <table className="w-full min-w-[620px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -1124,7 +1266,7 @@ function AdminUsers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {((wmsQuery.data as any[]) ?? []).map((user) => (
+              {((wmsQuery.data as WmsUserRecord[]) ?? []).map((user) => (
                 <tr key={user.id}>
                   <td className="p-4 font-mono">{user.username}</td>
                   <td className="p-4">{user.display_name}</td>
@@ -1154,6 +1296,54 @@ function AdminUsers() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="mt-4 grid gap-3 sm:hidden">
+          {wmsQuery.isLoading ? (
+            <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
+              Carregando acessos do PDV…
+            </p>
+          ) : ((wmsQuery.data as WmsUserRecord[]) ?? []).length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
+              Nenhum acesso WMS cadastrado.
+            </p>
+          ) : (
+            ((wmsQuery.data as WmsUserRecord[]) ?? []).map((user) => (
+              <article key={user.id} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-all font-mono text-sm font-semibold">{user.username}</p>
+                    <p className="mt-1 break-words">{user.display_name}</p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${user.active ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}
+                  >
+                    {user.active ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+                  <span className="text-sm text-muted-foreground">
+                    {user.role === "admin_remote" ? "Admin remoto" : "Caixa local"}
+                  </span>
+                  <button
+                    type="button"
+                    className="min-h-10 rounded-lg border border-border px-4 text-sm font-semibold text-primary"
+                    onClick={() =>
+                      setEditingWms({
+                        id: user.id,
+                        username: user.username,
+                        displayName: user.display_name,
+                        password: "",
+                        role: user.role,
+                        active: user.active,
+                      })
+                    }
+                  >
+                    Editar acesso
+                  </button>
+                </div>
+              </article>
+            ))
+          )}
         </div>
       </div>
     </section>

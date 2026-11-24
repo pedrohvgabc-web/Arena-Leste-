@@ -139,7 +139,7 @@ function PhotoEditor({
           maxLength={180}
           rows={2}
           onChange={(event) => setAltText(event.target.value)}
-          className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          className="min-h-11 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm"
           aria-describedby={`photo-alt-help-${photo.id}`}
         />
         <p
@@ -164,7 +164,7 @@ function PhotoEditor({
             Mostrar no site
           </span>
         </label>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+        <div className="grid grid-cols-2 items-center gap-2 border-t border-border pt-3 sm:flex sm:flex-wrap sm:justify-between">
           <div className="flex gap-2" aria-label={`Ordem da foto ${index + 1} de ${count}`}>
             <button
               type="button"
@@ -187,7 +187,7 @@ function PhotoEditor({
           </div>
           <button
             type="button"
-            className="btn min-h-11 border-destructive/40 px-3 text-destructive hover:bg-destructive/10"
+            className="btn min-h-11 justify-center border-destructive/40 px-3 text-destructive hover:bg-destructive/10"
             disabled={deleting}
             onClick={() => onDelete(photo)}
           >
@@ -196,7 +196,7 @@ function PhotoEditor({
           </button>
           <button
             type="button"
-            className="btn pri min-h-11 px-3"
+            className="btn pri min-h-11 justify-center px-3"
             disabled={!dirty || saving || !title.trim() || !altText.trim()}
             onClick={() => onSave({ id: photo.id, title, altText, isActive })}
           >
@@ -332,7 +332,7 @@ export function PhotoGalleryAdmin() {
         </p>
         <h1
           id="gallery-admin-title"
-          className="mt-2 font-display text-4xl font-extrabold uppercase"
+          className="mt-2 font-display text-3xl font-extrabold uppercase sm:text-4xl"
         >
           Galeria de fotos
         </h1>
@@ -360,7 +360,7 @@ export function PhotoGalleryAdmin() {
 
       <form
         onSubmit={handleUpload}
-        className="grid gap-4 rounded-2xl border border-border bg-card p-5 md:grid-cols-2"
+        className="grid gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5 md:grid-cols-2"
       >
         <div className="md:col-span-2">
           <h2 className="font-display text-2xl font-bold uppercase">Adicionar uma foto</h2>

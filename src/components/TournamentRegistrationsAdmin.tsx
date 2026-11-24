@@ -50,14 +50,14 @@ export function TournamentRegistrationsAdmin() {
       className="mt-8 rounded-3xl border border-primary/35 bg-card p-5 sm:p-7"
       aria-labelledby="tournament-admin-heading"
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
         <div>
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">
             <Trophy className="h-4 w-4" /> Torneio Novembro Azul
           </p>
           <h2
             id="tournament-admin-heading"
-            className="mt-2 font-display text-3xl font-extrabold uppercase"
+            className="mt-2 font-display text-2xl font-extrabold uppercase sm:text-3xl"
           >
             Pré-inscrições
           </h2>
@@ -152,7 +152,7 @@ export function TournamentRegistrationsAdmin() {
                         type="button"
                         onClick={() => setRevealed(phoneIsVisible ? null : row.id)}
                         aria-label={phoneIsVisible ? "Ocultar WhatsApp" : "Mostrar WhatsApp"}
-                        className="grid h-9 w-9 place-items-center rounded-lg border border-border hover:bg-accent"
+                        className="grid h-11 w-11 place-items-center rounded-lg border border-border hover:bg-accent"
                       >
                         {phoneIsVisible ? (
                           <EyeOff className="h-4 w-4" />
@@ -164,7 +164,7 @@ export function TournamentRegistrationsAdmin() {
                         href={`https://wa.me/55${row.captain_phone}?text=${encodeURIComponent(contactMessage)}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold hover:border-primary hover:text-primary"
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-border px-3 text-xs font-semibold hover:border-primary hover:text-primary"
                       >
                         <MessageCircle className="h-3.5 w-3.5" /> Contatar capitão
                       </a>

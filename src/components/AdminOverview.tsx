@@ -18,6 +18,7 @@ type Summary = {
     customer_name: string;
     space_name: string;
     unit_id: string;
+    is_admin_manual: boolean;
   }>;
 };
 
@@ -48,14 +49,14 @@ export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps
 
   return (
     <section aria-labelledby="admin-overview-heading">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+      <div className="flex flex-col items-start justify-between gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:gap-4">
         <div>
           <p className="font-mono text-xs font-bold uppercase tracking-[0.12em] text-primary">
             Arena Leste · operação
           </p>
           <h2
             id="admin-overview-heading"
-            className="mt-2 font-display text-4xl font-extrabold uppercase leading-[0.9] sm:text-5xl"
+            className="mt-2 font-display text-3xl font-extrabold uppercase leading-[0.95] sm:text-5xl"
           >
             Visão geral
           </h2>
@@ -83,7 +84,7 @@ export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps
         </p>
       ) : data ? (
         <>
-          <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
             {[
               { label: "Reservas hoje", value: String(data.todayBookings), icon: CalendarDays },
               { label: "Aguardando confirmação", value: String(data.todayPending), icon: Clock3 },
@@ -100,12 +101,15 @@ export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <article key={item.label} className="border-l-2 border-primary pl-4 py-3">
+                <article
+                  key={item.label}
+                  className="min-w-0 rounded-xl border border-border bg-card/50 border-l-2 border-l-primary px-3 py-3 sm:pl-4"
+                >
                   <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
                   <p className="mt-3 text-xs font-semibold leading-snug text-muted-foreground">
                     {item.label}
                   </p>
-                  <p className="mt-1 font-display text-3xl font-extrabold tabular-nums">
+                  <p className="mt-1 font-display text-2xl font-extrabold tabular-nums sm:text-3xl">
                     {item.value}
                   </p>
                 </article>
@@ -113,21 +117,23 @@ export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps
             })}
           </div>
 
-          <div className="mt-8 grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="mt-7 grid gap-6 sm:mt-8 sm:gap-8 xl:grid-cols-[1.1fr_0.9fr]">
             <div>
               <div className="flex items-center justify-between gap-3 border-b border-border pb-3">
-                <h3 className="font-display text-2xl font-bold uppercase">Próximos horários</h3>
+                <h3 className="font-display text-xl font-bold uppercase sm:text-2xl">
+                  Próximos horários
+                </h3>
                 <button
                   type="button"
                   onClick={() => onNavigate("agenda")}
-                  className="inline-flex min-h-10 items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+                  className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-sm font-bold text-primary hover:underline"
                 >
                   Abrir agenda <ArrowRight className="h-4 w-4" />
                 </button>
               </div>
               {data.upcoming.length === 0 ? (
                 <p className="mt-4 text-sm text-muted-foreground">
-                  Nenhuma reserva futura confirmada ou pendente.
+                  Nenhuma reserva futura confirmada ou bloqueio manual.
                 </p>
               ) : (
                 <ul className="divide-y divide-border">
@@ -141,12 +147,17 @@ export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps
                     return (
                       <li
                         key={`${row.booking_date}-${row.start_time}-${row.unit_id}-${index}`}
-                        className="flex flex-wrap items-center justify-between gap-3 py-3"
+                        className="flex flex-wrap items-center justify-between gap-2 py-3"
                       >
                         <div>
                           <p className="font-semibold">
                             {row.customer_name.split(" ")[0]} · {row.space_name}
                           </p>
+                          {row.is_admin_manual && (
+                            <p className="mt-1 text-xs font-bold text-primary">
+                              Bloqueio manual · sem pagamento
+                            </p>
+                          )}
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {unit?.name ?? "Arena Leste"} · {dateLabel}
                           </p>
@@ -162,7 +173,7 @@ export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps
             </div>
 
             <div>
-              <h3 className="border-b border-border pb-3 font-display text-2xl font-bold uppercase">
+              <h3 className="border-b border-border pb-3 font-display text-xl font-bold uppercase sm:text-2xl">
                 Acesso rápido
               </h3>
               <div className="mt-3 divide-y divide-border">

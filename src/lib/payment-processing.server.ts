@@ -269,6 +269,14 @@ export async function processInfinitePayPayment(
       await tx`
         SELECT id FROM public.bookings WHERE group_code = ${order.code} FOR UPDATE
       `;
+      const lockDays = (await tx`
+        SELECT DISTINCT space_id, booking_date::text AS booking_date
+        FROM public.bookings WHERE group_code = ${order.code}
+        ORDER BY space_id, booking_date
+      `) as unknown as Array<{ space_id: string; booking_date: string }>;
+      for (const day of lockDays) {
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${`arena-booking:${day.space_id}:${day.booking_date}`})::bigint)`;
+      }
       const counts = (await tx`
         SELECT COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE payment_status = 'pending' AND expires_at > ${now}::timestamptz)::int AS active
@@ -282,7 +290,7 @@ export async function processInfinitePayPayment(
           AND other.booking_date = b.booking_date
           AND other.slot && b.slot
           AND other.id <> b.id
-          AND other.payment_status IN ('pending', 'paid')
+          AND (other.payment_status = 'paid' OR (other.is_admin_manual = true AND other.payment_status = 'pending'))
         WHERE b.group_code = ${order.code}
       `) as unknown as Array<{ count: number }>;
       const canConfirm =

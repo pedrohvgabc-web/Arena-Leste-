@@ -45,7 +45,7 @@ export function AdminDataBackup() {
       </p>
       <h2
         id="backup-heading"
-        className="mt-2 font-display text-4xl font-extrabold uppercase leading-[0.9] sm:text-5xl"
+        className="mt-2 font-display text-3xl font-extrabold uppercase leading-[0.95] sm:text-5xl"
       >
         Backup seguro
       </h2>
@@ -64,7 +64,7 @@ export function AdminDataBackup() {
         type="button"
         onClick={() => void downloadBackup()}
         disabled={busy}
-        className="mt-7 inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-primary px-6 font-bold text-primary-foreground disabled:cursor-wait disabled:opacity-60"
+        className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-primary px-6 font-bold text-primary-foreground disabled:cursor-wait disabled:opacity-60 sm:w-auto"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         {busy ? "Preparando arquivo…" : "Exportar backup JSON"}

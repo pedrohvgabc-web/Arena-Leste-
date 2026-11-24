@@ -941,8 +941,8 @@ function Reservar() {
                       ou <strong>R$ 45/h de quinta a sábado</strong>, no Pix ou dinheiro.
                     </p>
                     <p className="booking-promo-summary__note">
-                      Para exatamente 2h: quinta a sábado, 19h–21h ou 21h–23h por R$ 90 no Pix ou
-                      dinheiro.
+                      Base: R$60/h. Exatamente 2h de quinta a sábado, nas faixas 19h–21h ou 21h–23h:
+                      R$90 no Pix ou dinheiro.
                     </p>
                   </div>
                   <button
@@ -1529,7 +1529,7 @@ function Reservar() {
               <div>
                 <span>Quinta a sábado</span>
                 <strong>R$ 45/h</strong>
-                <small>10% abaixo da tarifa normal de R$ 50/h</small>
+                <small>Acima de 2 horas</small>
               </div>
             </div>
             <p className="booking-promo-dialog__two-hour-note">
@@ -1538,51 +1538,14 @@ function Reservar() {
           </section>
           <section
             className="booking-promo-dialog__windows"
-            aria-label="Valores por faixa de horário"
+            aria-label="Horários públicos e tarifa base"
           >
-            <h3>Valores por faixa de horário</h3>
-            <div className="booking-promo-dialog__day">
-              <h4>Domingo a quarta</h4>
-              <div className="booking-promo-dialog__chips">
-                <span>
-                  <small>18h–19h</small>
-                  <b>R$ 40</b>
-                </span>
-                <span>
-                  <small>19h–21h</small>
-                  <b>R$ 80</b>
-                </span>
-                <span>
-                  <small>21h–23h</small>
-                  <b>R$ 80</b>
-                </span>
-                <span>
-                  <small>23h–0h</small>
-                  <b>R$ 40</b>
-                </span>
-              </div>
-            </div>
-            <div className="booking-promo-dialog__day">
-              <h4>Quinta a sábado</h4>
-              <div className="booking-promo-dialog__chips">
-                <span>
-                  <small>18h–19h</small>
-                  <b>R$ 50</b>
-                </span>
-                <span>
-                  <small>19h–21h</small>
-                  <b>R$ 90</b>
-                </span>
-                <span>
-                  <small>21h–23h</small>
-                  <b>R$ 90</b>
-                </span>
-                <span>
-                  <small>23h–0h</small>
-                  <b>R$ 50</b>
-                </span>
-              </div>
-            </div>
+            <h3>Quando reservar</h3>
+            <ul className="booking-promo-dialog__rules">
+              <li>Segunda a sexta: 19h–23h.</li>
+              <li>Sábado e domingo: 15h–23h.</li>
+              <li>Tarifa base fora da promoção: R$60 por hora.</li>
+            </ul>
           </section>
           <button
             type="button"

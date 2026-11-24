@@ -13,16 +13,16 @@ import {
   BOOKING_HORIZON_DAYS,
   weekdayOf,
   toMin,
+  isValidDateISO,
+  validateAdminManualRange,
   validateOpeningWindows,
   hasFirstAndLastName,
-  HOLIDAY_OPENING_WINDOWS,
   type OpeningWindow,
   type PaymentPlan,
 } from "./arena-rules";
 import { normalizeValidCpf } from "./customer-data";
 import { tournamentRegistrationSchema } from "./tournament-schema";
 import { TOURNAMENT } from "./site";
-import { arenaHolidaysForYear } from "./holidays";
 import { paymentCheckoutErrorMessage } from "./payment-errors";
 import type { ReservationPushDetails } from "./push-notification-content";
 
@@ -42,6 +42,7 @@ type AvailabilityRow = {
   start_time: string | null;
   end_time: string | null;
   payment_status: string | null;
+  is_admin_manual: boolean | null;
   weekly_windows: unknown;
   override_windows: unknown;
   override_date: string | null;
@@ -53,7 +54,7 @@ type SpacePriceRow = {
   slot_minutes: number;
   unit_id: string;
 };
-type OccupiedRow = { start_time: string };
+type OccupiedRow = { start_time: string; end_time: string };
 type HoursRow = { windows: unknown };
 type InsertedBookingRow = { id: string };
 type ReleasedSlot = { start: string; end: string };
@@ -99,6 +100,7 @@ type BookingAdminRow = {
   phone: string;
   payment_method: string;
   payment_status: string;
+  is_admin_manual?: boolean;
   payment_provider: string | null;
   provider_payment_status: string | null;
   provider_capture_method: string | null;
@@ -127,6 +129,8 @@ type LockedBookingRow = {
   payment_status: string;
   group_code: string;
   space_id: string;
+  booking_date: string;
+  is_admin_manual: boolean;
 };
 type ReleasableBookingRow = {
   id: string;
@@ -139,12 +143,6 @@ type ReleasableBookingRow = {
 type BookingPaymentReviewRow = { provider: string; provider_status: string };
 
 const database = async () => (await import("./db.server")).getDb();
-
-function isArenaHoliday(dateISO: string) {
-  return arenaHolidaysForYear(Number(dateISO.slice(0, 4))).some(
-    (holiday) => holiday.date === dateISO,
-  );
-}
 
 function durationMinutesOfSlots(slots: Array<{ start: string; end: string }>) {
   return slots.reduce((total, slot) => total + toMin(slot.end) - toMin(slot.start), 0);
@@ -189,12 +187,6 @@ function normalizeWindows(value: unknown): OpeningWindow[] {
       ? [{ start, end, ...(slotMinutes === undefined ? {} : { slotMinutes }) }]
       : [];
   });
-}
-
-function isValidDateISO(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year = 0, month = 0, day = 0] = value.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) === value;
 }
 
 /** Fixed-window rate limit stored atomically in the database (workers are stateless). */
@@ -315,7 +307,7 @@ export const getPublicReleasedSlotOffers = createServerFn({ method: "GET" }).han
           ON b.space_id = o.space_id AND b.booking_date = o.booking_date
           AND b.start_time < (offered.slot ->> 'end')::time
           AND b.end_time > (offered.slot ->> 'start')::time
-          AND b.payment_status IN ('pending', 'paid')
+          AND (b.payment_status = 'paid' OR (b.is_admin_manual = true AND b.payment_status = 'pending'))
       )
     ORDER BY o.created_at DESC
     LIMIT 20
@@ -376,12 +368,7 @@ export const getPublicBookingDates = createServerFn({ method: "GET" })
       return date.toISOString().slice(0, 10);
     }).filter((date) => {
       const override = overrides.get(date);
-      const windows =
-        override === undefined
-          ? isArenaHoliday(date)
-            ? HOLIDAY_OPENING_WINDOWS
-            : weekly.get(weekdayOf(date))
-          : override;
+      const windows = override === undefined ? weekly.get(weekdayOf(date)) : override;
       return normalizeWindows(windows).length > 0;
     });
   });
@@ -397,14 +384,14 @@ export const getAvailability = createServerFn({ method: "GET" })
       SELECT s.unit_id, s.slot_minutes,
         to_char(b.start_time, 'HH24:MI') AS start_time,
         to_char(b.end_time, 'HH24:MI') AS end_time,
-        b.payment_status,
+        b.payment_status, b.is_admin_manual,
         wh.windows AS weekly_windows,
         ov.windows AS override_windows,
         ov.booking_date::text AS override_date
       FROM public.arena_spaces s
       LEFT JOIN public.bookings b
         ON b.space_id = s.id AND b.booking_date = ${data.date}::date
-        AND b.payment_status IN ('pending', 'paid')
+        AND (b.payment_status = 'paid' OR (b.is_admin_manual = true AND b.payment_status = 'pending'))
       LEFT JOIN LATERAL (
         SELECT windows FROM public.arena_weekly_hours
         WHERE unit_id = s.unit_id AND weekday = ${weekdayOf(data.date)}
@@ -427,17 +414,13 @@ export const getAvailability = createServerFn({ method: "GET" })
             {
               start: row.start_time,
               end: row.end_time,
-              status: row.payment_status,
+              status: row.is_admin_manual ? "manual" : row.payment_status,
             },
           ]
         : [],
     );
     const windows = normalizeWindows(
-      first.override_date !== null
-        ? first.override_windows
-        : isArenaHoliday(data.date)
-          ? HOLIDAY_OPENING_WINDOWS
-          : first.weekly_windows,
+      first.override_date !== null ? first.override_windows : first.weekly_windows,
     );
     return slotsFor(data.date, windows, Number(first.slot_minutes)).map((s) => {
       const conflict = occupied.find(
@@ -447,7 +430,7 @@ export const getAvailability = createServerFn({ method: "GET" })
       return {
         ...s,
         status:
-          conflict?.status === "paid"
+          conflict?.status === "paid" || conflict?.status === "manual"
             ? "confirmed"
             : conflict?.status === "pending"
               ? "pending"
@@ -583,11 +566,7 @@ export const createBooking = createServerFn({ method: "POST" })
         ]);
         const dateOverride = (overrideRows as unknown as HoursRow[])[0];
         const windows = normalizeWindows(
-          dateOverride
-            ? dateOverride.windows
-            : isArenaHoliday(data.date)
-              ? HOLIDAY_OPENING_WINDOWS
-              : (hoursRows as unknown as HoursRow[])[0]?.windows,
+          dateOverride ? dateOverride.windows : (hoursRows as unknown as HoursRow[])[0]?.windows,
         );
         const slots: Array<{ start: string; end: string }> = [];
         for (const start of starts) {
@@ -638,17 +617,26 @@ export const createBooking = createServerFn({ method: "POST" })
           }
         }
 
-        // Give the customer a clear response before creating a payment; the exclusion
-        // constraint remains the final protection against concurrent reservations.
+        // Serialize only the brief database operation, never the customer's checkout.
+        // Public pending bookings deliberately do not hold or reserve the slot.
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${`arena-booking:${space.id}:${data.date}`})::bigint)`;
+
+        // Only a validated payment or an explicit Master booking blocks the slot.
         const occupied = (await tx`
-          SELECT to_char(start_time, 'HH24:MI') AS start_time
+          SELECT to_char(start_time, 'HH24:MI') AS start_time,
+            to_char(end_time, 'HH24:MI') AS end_time
           FROM public.bookings
           WHERE space_id = ${space.id} AND booking_date = ${data.date}::date
-            AND payment_status IN ('pending', 'paid')
+            AND (payment_status = 'paid' OR (is_admin_manual = true AND payment_status = 'pending'))
         `) as unknown as OccupiedRow[];
-        const taken = occupied.filter((row) => starts.includes(String(row.start_time)));
+        const taken = occupied.filter((row) =>
+          slots.some(
+            (slot) =>
+              toMin(row.start_time) < toMin(slot.end) && toMin(row.end_time) > toMin(slot.start),
+          ),
+        );
         if (taken.length) {
-          const times = taken.map((row) => String(row.start_time)).join(", ");
+          const times = taken.map((row) => `${row.start_time}–${row.end_time}`).join(", ");
           return { code: null, error: `Estes horários já foram reservados: ${times}.` };
         }
 
@@ -1756,7 +1744,7 @@ export const adminCurrentDay = createServerFn({ method: "GET" })
       SELECT b.id, b.booking_code, b.group_code, b.booking_date::text AS booking_date,
         to_char(b.start_time, 'HH24:MI:SS') AS start_time,
         to_char(b.end_time, 'HH24:MI:SS') AS end_time,
-        b.customer_name, b.phone, b.payment_method, b.payment_status,
+        b.customer_name, b.phone, b.payment_method, b.payment_status, b.is_admin_manual,
         p.provider AS payment_provider, p.status AS provider_payment_status,
         p.capture_method AS provider_capture_method, p.amount_cents AS provider_amount_cents,
         b.amount_cents,
@@ -1802,7 +1790,7 @@ export const adminCurrentBookings = createServerFn({ method: "GET" })
       SELECT b.id, b.booking_code, b.group_code, b.booking_date::text AS booking_date,
         to_char(b.start_time, 'HH24:MI:SS') AS start_time,
         to_char(b.end_time, 'HH24:MI:SS') AS end_time,
-        b.customer_name, b.phone, b.payment_method, b.payment_status,
+        b.customer_name, b.phone, b.payment_method, b.payment_status, b.is_admin_manual,
         p.provider AS payment_provider, p.status AS provider_payment_status,
         p.capture_method AS provider_capture_method, p.amount_cents AS provider_amount_cents,
         b.amount_cents,
@@ -1819,6 +1807,113 @@ export const adminCurrentBookings = createServerFn({ method: "GET" })
       LIMIT 500
     `) as unknown as Array<BookingAdminRow & { space_name: string; unit_id: string }>;
     return { bookings: rows };
+  });
+
+const adminManualBookingSchema = z.object({
+  unitId: z.enum(["unidade-1", "unidade-2"]),
+  spaceId: z.string().min(1).max(40),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+  name: z.string().trim().min(2, "Informe o nome.").max(80),
+  phone: z.string().max(30),
+});
+
+/** Reserva manual do Admin Master: ocupa na hora, sem inserir pagamento ou valor fictício. */
+export const adminCreateManualBooking = createServerFn({ method: "POST" })
+  .inputValidator(adminManualBookingSchema)
+  .handler(async ({ data }) => {
+    const actor = await requireAdminRole(["master"]);
+    if (!isValidDateISO(data.date)) return { ok: false as const, error: "Data inválida." };
+    if (data.date < arenaNow().date)
+      return {
+        ok: false as const,
+        error: "A reserva manual precisa ser hoje ou em uma data futura.",
+      };
+    const range = validateAdminManualRange(data.start, data.end);
+    if (!range.ok) return { ok: false as const, error: range.reason };
+    const name = data.name.replace(/[<>]/g, "").replace(/\s+/g, " ").trim();
+    if (name.length < 2) return { ok: false as const, error: "Informe um nome válido." };
+    const phone = normalizePhone(data.phone);
+    if (!phone) return { ok: false as const, error: "WhatsApp inválido. Use DDD + número." };
+
+    const db = await database();
+    const bookingCode = `AL-M-${randomCode(8)}`;
+    const idempotencyKey = `manual:${crypto.randomUUID()}`;
+    try {
+      return await db.begin(async (tx) => {
+        const spaces = (await tx`
+          SELECT id, unit_id FROM public.arena_spaces
+          WHERE id = ${data.spaceId} AND unit_id = ${data.unitId}
+          FOR SHARE
+        `) as unknown as Array<{ id: string; unit_id: string }>;
+        if (!spaces[0])
+          return { ok: false as const, error: "A quadra não pertence à unidade selecionada." };
+
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${`arena-booking:${data.spaceId}:${data.date}`})::bigint)`;
+        const conflicts = (await tx`
+          SELECT id FROM public.bookings
+          WHERE space_id = ${data.spaceId} AND booking_date = ${data.date}::date
+            AND slot && tsrange(
+              ${data.date}::date + ${data.start}::time,
+              ${data.date}::date + ${data.end}::time,
+              '[)'
+            )
+            AND (payment_status = 'paid' OR (is_admin_manual = true AND payment_status = 'pending'))
+          LIMIT 1
+        `) as unknown as Array<{ id: string }>;
+        if (conflicts.length) {
+          return {
+            ok: false as const,
+            error:
+              "Esse intervalo já está ocupado por uma reserva confirmada ou outro bloqueio manual.",
+          };
+        }
+
+        const pendingRows = (await tx`
+          SELECT COUNT(DISTINCT COALESCE(group_code, booking_code))::int AS count
+          FROM public.bookings
+          WHERE space_id = ${data.spaceId} AND booking_date = ${data.date}::date
+            AND slot && tsrange(
+              ${data.date}::date + ${data.start}::time,
+              ${data.date}::date + ${data.end}::time,
+              '[)'
+            )
+            AND payment_status = 'pending' AND is_admin_manual = false
+            AND (expires_at IS NULL OR expires_at > now())
+        `) as unknown as Array<{ count: number }>;
+        const pendingCheckoutCount = Number(pendingRows[0]?.count ?? 0);
+        await tx`
+          INSERT INTO public.bookings (
+            booking_code, group_code, idempotency_key, space_id, booking_date,
+            start_time, end_time, customer_name, phone, payment_method,
+            payment_status, amount_cents, expires_at, is_admin_manual
+          ) VALUES (
+            ${bookingCode}, ${bookingCode}, ${idempotencyKey}, ${data.spaceId}, ${data.date}::date,
+            ${data.start}::time, ${data.end}::time, ${name}, ${phone}, 'admin_manual',
+            'pending', 0, NULL, true
+          )
+        `;
+        await tx`
+          INSERT INTO public.audit_logs (actor, action, entity, entity_id, details)
+          VALUES (
+            ${actor.name}, 'booking.manual.create', 'booking', ${bookingCode},
+            ${JSON.stringify({ bookingCode, unitId: data.unitId, spaceId: data.spaceId, date: data.date, start: data.start, end: data.end, pendingCheckoutCount })}::jsonb
+          )
+        `;
+        return { ok: true as const, bookingCode, pendingCheckoutCount };
+      });
+    } catch (error) {
+      if (errorCode(error) === "23P01") {
+        return {
+          ok: false as const,
+          error:
+            "Esse intervalo foi ocupado por outra reserva. Atualize a agenda e tente novamente.",
+        };
+      }
+      console.error("admin manual booking failed", errorCode(error) ?? "unknown");
+      return { ok: false as const, error: "Não foi possível criar o bloqueio manual." };
+    }
   });
 
 export const adminPending = createServerFn({ method: "GET" }).handler(async () => {
@@ -1854,18 +1949,22 @@ export const adminUpdateBooking = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    await requireAdminRole(["master", "caixa"]);
+    const actor = await requireAdminRole(["master", "caixa"]);
     const db = await database();
     const now = new Date().toISOString();
     let releasedOffers: Array<{ spaceId: string; date: string; slots: ReleasedSlot[] }> = [];
     try {
       const result = await db.begin(async (tx) => {
         const bookings = (await tx`
-        SELECT payment_method, payment_status, group_code, space_id
+        SELECT payment_method, payment_status, group_code, space_id,
+          booking_date::text AS booking_date, is_admin_manual
         FROM public.bookings WHERE id = ${data.id}::uuid FOR UPDATE
       `) as unknown as LockedBookingRow[];
         const booking = bookings[0];
         if (!booking) return { ok: false, error: "Reserva não encontrada." };
+        if (booking.is_admin_manual && actor.role !== "master") {
+          return { ok: false, error: "Somente o Admin Master pode alterar um bloqueio manual." };
+        }
 
         let cancellableBookings: ReleasableBookingRow[] = [];
         if (data.action === "cancel") {
@@ -1936,6 +2035,14 @@ export const adminUpdateBooking = createServerFn({ method: "POST" })
                 "O horário já terminou. Não é possível reativar a reserva; contate o cliente e trate eventual estorno diretamente na InfinitePay.",
             };
           }
+          const lockDays = (await tx`
+            SELECT DISTINCT space_id, booking_date::text AS booking_date
+            FROM public.bookings WHERE group_code = ${booking.group_code}
+            ORDER BY space_id, booking_date
+          `) as unknown as Array<{ space_id: string; booking_date: string }>;
+          for (const day of lockDays) {
+            await tx`SELECT pg_advisory_xact_lock(hashtext(${`arena-booking:${day.space_id}:${day.booking_date}`})::bigint)`;
+          }
           const conflicts = (await tx`
           SELECT COUNT(*)::int AS count
           FROM public.bookings candidate
@@ -1943,7 +2050,7 @@ export const adminUpdateBooking = createServerFn({ method: "POST" })
             ON other.space_id = candidate.space_id
             AND other.slot && candidate.slot
             AND other.group_code IS DISTINCT FROM candidate.group_code
-            AND other.payment_status IN ('pending', 'paid')
+            AND (other.payment_status = 'paid' OR (other.is_admin_manual = true AND other.payment_status = 'pending'))
           WHERE candidate.group_code = ${booking.group_code}
         `) as unknown as Array<{ count: number }>;
           if (Number(conflicts[0]?.count ?? 0) > 0) {
@@ -1968,6 +2075,11 @@ export const adminUpdateBooking = createServerFn({ method: "POST" })
 
         if (data.action === "mark_paid") {
           // Confirmação manual pelo administrador; um Pix pode cobrir todo o grupo.
+          if (booking.is_admin_manual)
+            return {
+              ok: false,
+              error: "Este bloqueio manual não possui pagamento para confirmar.",
+            };
           if (booking.payment_status !== "pending")
             return { ok: false, error: "Reserva não está pendente." };
           const providers = (await tx`
@@ -1987,6 +2099,32 @@ export const adminUpdateBooking = createServerFn({ method: "POST" })
           WHERE group_code = ${booking.group_code} AND payment_status = 'pending'
           ORDER BY id FOR UPDATE
         `;
+          const lockDays = (await tx`
+            SELECT DISTINCT space_id, booking_date::text AS booking_date
+            FROM public.bookings WHERE group_code = ${booking.group_code}
+            ORDER BY space_id, booking_date
+          `) as unknown as Array<{ space_id: string; booking_date: string }>;
+          for (const day of lockDays) {
+            await tx`SELECT pg_advisory_xact_lock(hashtext(${`arena-booking:${day.space_id}:${day.booking_date}`})::bigint)`;
+          }
+          const conflicts = (await tx`
+            SELECT COUNT(*)::int AS count
+            FROM public.bookings candidate
+            INNER JOIN public.bookings other
+              ON other.space_id = candidate.space_id
+              AND other.booking_date = candidate.booking_date
+              AND other.slot && candidate.slot
+              AND other.group_code IS DISTINCT FROM candidate.group_code
+              AND (other.payment_status = 'paid' OR (other.is_admin_manual = true AND other.payment_status = 'pending'))
+            WHERE candidate.group_code = ${booking.group_code}
+          `) as unknown as Array<{ count: number }>;
+          if (Number(conflicts[0]?.count ?? 0) > 0) {
+            return {
+              ok: false,
+              error:
+                "O intervalo já está ocupado. O pagamento precisa ser tratado manualmente; não foi confirmado no sistema.",
+            };
+          }
           await tx`
           UPDATE public.bookings SET payment_status = 'paid', updated_at = ${now}::timestamptz
           WHERE group_code = ${booking.group_code} AND payment_status = 'pending'
@@ -2171,10 +2309,13 @@ export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(a
     db`
       SELECT
         COUNT(DISTINCT COALESCE(b.group_code, b.booking_code)) FILTER (
-          WHERE b.booking_date = ${date}::date AND b.payment_status IN ('pending', 'paid')
+          WHERE b.booking_date = ${date}::date
+            AND (b.payment_status = 'paid' OR (b.is_admin_manual = true AND b.payment_status = 'pending'))
         ) AS today_bookings,
         COUNT(DISTINCT COALESCE(b.group_code, b.booking_code)) FILTER (
           WHERE b.booking_date = ${date}::date AND b.payment_status = 'pending'
+            AND b.is_admin_manual = false
+            AND (b.expires_at IS NULL OR b.expires_at > now())
         ) AS today_pending
       FROM public.bookings b
       INNER JOIN public.arena_spaces s ON s.id = b.space_id
@@ -2191,17 +2332,19 @@ export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(a
     db`
       SELECT booking_date, start_time, customer_name, space_name, unit_id
       FROM (
-        SELECT DISTINCT ON (COALESCE(b.group_code, b.booking_code))
-          b.booking_date::text AS booking_date,
-          to_char(b.start_time, 'HH24:MI') AS start_time,
-          b.customer_name,
-          s.name AS space_name,
-          s.unit_id,
-          COALESCE(b.group_code, b.booking_code) AS group_code
+          SELECT DISTINCT ON (COALESCE(b.group_code, b.booking_code))
+            b.booking_date::text AS booking_date,
+            to_char(b.start_time, 'HH24:MI') AS start_time,
+            b.customer_name,
+            s.name AS space_name,
+            s.unit_id,
+            b.is_admin_manual,
+            COALESCE(b.group_code, b.booking_code) AS group_code
         FROM public.bookings b
         INNER JOIN public.arena_spaces s ON s.id = b.space_id
         WHERE s.unit_id IN ('unidade-1', 'unidade-2')
-          AND b.booking_date >= ${date}::date AND b.payment_status IN ('pending', 'paid')
+          AND b.booking_date >= ${date}::date
+          AND (b.payment_status = 'paid' OR (b.is_admin_manual = true AND b.payment_status = 'pending'))
         ORDER BY COALESCE(b.group_code, b.booking_code), b.booking_date, b.start_time
       ) upcoming
       ORDER BY booking_date, start_time
@@ -2229,6 +2372,7 @@ export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(a
       customer_name: string;
       space_name: string;
       unit_id: string;
+      is_admin_manual: boolean;
     }>,
   };
 });

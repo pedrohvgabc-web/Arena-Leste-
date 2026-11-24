@@ -3,7 +3,7 @@ export const ARENA_TZ = "America/Porto_Velho";
 export const SLOT_MINUTES = 60;
 
 export type OpeningWindow = { start: string; end: string; slotMinutes?: number };
-export type PaymentMethod = "pix" | "card_onsite" | "cash_onsite";
+export type PaymentMethod = "pix" | "card_onsite" | "cash_onsite" | "admin_manual";
 export const HOLIDAY_OPENING_WINDOWS: OpeningWindow[] = [{ start: "15:00", end: "24:00" }];
 export type PaymentPlan = "full" | "deposit_30";
 export type PaymentStatus = "pending" | "paid" | "cancelled" | "expired" | "failed";
@@ -11,6 +11,7 @@ export const PAYMENT_LABEL: Record<PaymentMethod, string> = {
   pix: "Pix demonstrativo",
   card_onsite: "Cartão no local",
   cash_onsite: "Dinheiro no local",
+  admin_manual: "Reserva manual · sem pagamento",
 };
 export const STATUS_LABEL: Record<PaymentStatus, string> = {
   pending: "Pendente",
@@ -64,30 +65,41 @@ export function validateOpeningWindows(windows: OpeningWindow[]) {
   return null;
 }
 
-/** Sugere um intervalo de pelo menos uma hora que não se sobrepõe ao existente. */
-export function suggestOpeningWindow(windows: OpeningWindow[]): OpeningWindow | null {
+/** Sugere um intervalo de pelo menos uma hora dentro da janela permitida, sem sobreposição. */
+export function suggestOpeningWindow(
+  windows: OpeningWindow[],
+  allowedWindow: Pick<OpeningWindow, "start" | "end"> = { start: "08:00", end: "23:00" },
+): OpeningWindow | null {
+  if (!validTime(allowedWindow.start) || !validTime(allowedWindow.end, true)) return null;
+  const allowedStart = toMin(allowedWindow.start);
+  const allowedEnd = toMin(allowedWindow.end);
+  if (allowedEnd - allowedStart < 60) return null;
   const ordered = windows
     .filter((window) => validTime(window.start) && validTime(window.end, true))
     .filter((window) => toMin(window.end) > toMin(window.start))
     .sort((a, b) => toMin(a.start) - toMin(b.start));
-  let cursor = 8 * 60;
-  const dayEnd = 23 * 60;
+  let cursor = allowedStart;
   const maxSuggestionMinutes = 4 * 60;
 
   for (const window of ordered) {
-    const start = toMin(window.start);
-    const gapEnd = Math.min(start, dayEnd);
+    const start = Math.max(toMin(window.start), allowedStart);
+    const end = Math.min(toMin(window.end), allowedEnd);
+    if (end <= allowedStart || start >= allowedEnd) continue;
+    const gapEnd = Math.min(start, allowedEnd);
     if (gapEnd - cursor >= 60) {
       return {
         start: toHHMM(cursor),
         end: toHHMM(Math.min(gapEnd, cursor + maxSuggestionMinutes)),
       };
     }
-    cursor = Math.max(cursor, toMin(window.end));
+    cursor = Math.max(cursor, end);
   }
 
-  if (dayEnd - cursor >= 60) {
-    return { start: toHHMM(cursor), end: toHHMM(Math.min(dayEnd, cursor + maxSuggestionMinutes)) };
+  if (allowedEnd - cursor >= 60) {
+    return {
+      start: toHHMM(cursor),
+      end: toHHMM(Math.min(allowedEnd, cursor + maxSuggestionMinutes)),
+    };
   }
   return null;
 }
@@ -119,6 +131,10 @@ function validDate(dateISO: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) return false;
   const [year = 0, month = 0, day = 0] = dateISO.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) === dateISO;
+}
+
+export function isValidDateISO(dateISO: string) {
+  return validDate(dateISO);
 }
 
 export function isWithinBookingHorizon(dateISO: string, todayISO: string) {
@@ -216,6 +232,28 @@ export function validateSlot(
   if (dateISO === current.date && toMin(start) <= current.minutes)
     return { ok: false, reason: "Esse horário já passou." };
   return { ok: true, end: slot.end };
+}
+
+/** Horários permitidos para reservas manuais do Admin Master, fora da grade pública. */
+export function validateAdminManualRange(
+  start: string,
+  end: string,
+): { ok: true; durationMinutes: number } | { ok: false; reason: string } {
+  if (!validTime(start) || !validTime(end, true)) {
+    return { ok: false, reason: "Informe horários válidos, usando 24:00 somente como término." };
+  }
+  const startMinutes = toMin(start);
+  const endMinutes = toMin(end);
+  if (startMinutes < 13 * 60 || endMinutes > 24 * 60) {
+    return { ok: false, reason: "Reservas manuais podem ocorrer entre 13:00 e 24:00." };
+  }
+  if (endMinutes <= startMinutes) {
+    return { ok: false, reason: "O término precisa ser posterior ao início." };
+  }
+  if (startMinutes % 15 !== 0 || endMinutes % 15 !== 0) {
+    return { ok: false, reason: "Escolha horários em intervalos de 15 minutos." };
+  }
+  return { ok: true, durationMinutes: endMinutes - startMinutes };
 }
 
 export const formatBRL = (cents: number) =>

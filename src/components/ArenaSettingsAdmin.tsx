@@ -37,12 +37,11 @@ const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
 const DURATION_OPTIONS = [30, 45, 60, 90, 120];
 const DEFAULT_WEEKDAY_WINDOWS: OpeningWindow[] = [
-  { start: "18:00", end: "19:00", slotMinutes: 60 },
-  { start: "19:00", end: "21:00", slotMinutes: 120 },
-  { start: "21:00", end: "23:00", slotMinutes: 120 },
-  { start: "23:00", end: "24:00", slotMinutes: 60 },
+  { start: "19:00", end: "23:00", slotMinutes: 60 },
 ];
-const DEFAULT_WEEKEND_WINDOWS = DEFAULT_WEEKDAY_WINDOWS;
+const DEFAULT_WEEKEND_WINDOWS: OpeningWindow[] = [
+  { start: "15:00", end: "23:00", slotMinutes: 60 },
+];
 
 function centsFromText(value: string) {
   const normalized = value.trim().replace(",", ".");
@@ -281,8 +280,8 @@ export function ArenaSettingsAdmin({
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
               Para a quadra aparecer na reserva, configure o preço, marque “Ativa para reserva” e
               clique em “Salvar e liberar na reserva”. Quadras inativas ou sem preço ficam ocultas.
-              A grade padrão é 18:00–19:00, 19:00–21:00, 21:00–23:00 e 23:00–00:00. Feriados
-              continuam usando a grade especial configurada para feriados.
+              Horários públicos padrão: segunda a sexta, 19:00–23:00; sábado e domingo, 15:00–23:00.
+              As datas especiais continuam respeitando as exceções configuradas.
             </p>
           </div>
           <span className="inline-flex min-h-9 items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 text-xs font-bold text-primary">
@@ -291,7 +290,7 @@ export function ArenaSettingsAdmin({
         </div>
         {showTabs && (
           <div
-            className="mt-5 flex flex-wrap gap-2"
+            className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"
             role="tablist"
             aria-label="Configurações da Arena"
           >
@@ -300,7 +299,7 @@ export function ArenaSettingsAdmin({
               role="tab"
               aria-selected={tab === "courts"}
               onClick={() => setTab("courts")}
-              className={`min-h-11 rounded-full px-5 text-sm font-bold transition-colors ${tab === "courts" ? "bg-primary text-primary-foreground" : "border border-border hover:border-primary/50"}`}
+              className={`min-h-11 rounded-full px-3 text-sm font-bold transition-colors sm:px-5 ${tab === "courts" ? "bg-primary text-primary-foreground" : "border border-border hover:border-primary/50"}`}
             >
               Quadras e valores
             </button>
@@ -309,7 +308,7 @@ export function ArenaSettingsAdmin({
               role="tab"
               aria-selected={tab === "hours"}
               onClick={() => setTab("hours")}
-              className={`min-h-11 rounded-full px-5 text-sm font-bold transition-colors ${tab === "hours" ? "bg-primary text-primary-foreground" : "border border-border hover:border-primary/50"}`}
+              className={`min-h-11 rounded-full px-3 text-sm font-bold transition-colors sm:px-5 ${tab === "hours" ? "bg-primary text-primary-foreground" : "border border-border hover:border-primary/50"}`}
             >
               Grade semanal
             </button>
@@ -379,7 +378,7 @@ export function ArenaSettingsAdmin({
                     key={space.id}
                     className="rounded-2xl border border-border bg-background p-4 sm:p-5"
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
                           Quadra {space.sortOrder % 100}
@@ -397,7 +396,7 @@ export function ArenaSettingsAdmin({
                               : "Oculta da reserva: requer ativação e preço"}
                         </p>
                       </div>
-                      <label className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold">
+                      <label className="inline-flex min-h-11 w-full items-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold sm:w-auto sm:border-0 sm:px-0">
                         <input
                           type="checkbox"
                           checked={draft.active}
@@ -514,9 +513,13 @@ export function ArenaSettingsAdmin({
           <div className="grid gap-3 lg:grid-cols-2">
             {WEEKDAYS.map((day, weekday) => {
               const windows = hoursDraft[selectedUnit][weekday] ?? [];
+              const allowedWindow = {
+                start: weekday === 0 || weekday === 6 ? "15:00" : "19:00",
+                end: "23:00",
+              };
               const suggestedWindows = windows.length
                 ? (() => {
-                    const suggestion = suggestOpeningWindow(windows);
+                    const suggestion = suggestOpeningWindow(windows, allowedWindow);
                     return suggestion ? [suggestion] : [];
                   })()
                 : (weekday === 0 || weekday === 6
@@ -544,7 +547,7 @@ export function ArenaSettingsAdmin({
                     {windows.map((window, index) => (
                       <div
                         key={`${day}-${index}`}
-                        className="grid grid-cols-[1fr_auto_1fr_auto] items-end gap-2"
+                        className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_auto_1fr_auto]"
                       >
                         <label className="text-xs font-semibold text-muted-foreground">
                           Abre
@@ -563,7 +566,7 @@ export function ArenaSettingsAdmin({
                             className="mt-1.5 h-11 w-full rounded-lg border border-input bg-card px-2 text-sm text-foreground"
                           />
                         </label>
-                        <span className="pb-3 text-muted-foreground">—</span>
+                        <span className="hidden pb-3 text-muted-foreground sm:block">—</span>
                         <label className="text-xs font-semibold text-muted-foreground">
                           Fecha
                           <input
@@ -598,7 +601,7 @@ export function ArenaSettingsAdmin({
                             )
                           }
                           aria-label={`Remover intervalo de ${day}`}
-                          className="mb-0.5 grid h-11 w-11 place-items-center rounded-lg border border-border text-muted-foreground hover:border-destructive hover:text-destructive"
+                          className="mb-0.5 grid h-11 w-full place-items-center rounded-lg border border-border text-muted-foreground hover:border-destructive hover:text-destructive sm:w-11"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -609,7 +612,7 @@ export function ArenaSettingsAdmin({
                         <button
                           type="button"
                           onClick={() => updateWindows(weekday, [...windows, ...suggestedWindows])}
-                          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-dashed border-border px-4 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+                          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-dashed border-border px-4 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary"
                         >
                           <Plus className="h-4 w-4" /> Adicionar intervalo
                         </button>
