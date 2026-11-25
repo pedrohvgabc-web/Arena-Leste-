@@ -236,6 +236,8 @@ export function CurrentBookingsAdmin({
   const updateBooking = useServerFn(adminUpdateBooking);
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => arenaNow().date);
+  const [agendaMode, setAgendaMode] = useState<"day" | "week">("day");
+  const [selectedBooking, setSelectedBooking] = useState<BookingGroup | null>(null);
   const [working, setWorking] = useState<string | null>(null);
   const [cancelBookingToConfirm, setCancelBookingToConfirm] = useState<BookingGroup | null>(null);
   const cancelDialogRef = useRef<HTMLDialogElement>(null);
@@ -264,15 +266,17 @@ export function CurrentBookingsAdmin({
       setManualSpaceId(manualSpaces[0]!.id);
     }
   }, [manualSpaces, manualSpaceId]);
-  const rangeStart = arenaNow().date;
-  const rangeEnd = shiftDate(rangeStart, 60);
+  const weekStart = shiftDate(date, -new Date(`${date}T12:00:00Z`).getUTCDay());
+  const weekEnd = shiftDate(weekStart, 6);
+  const rangeStart = view === "agenda" && agendaMode === "week" ? weekStart : arenaNow().date;
+  const rangeEnd = view === "agenda" && agendaMode === "week" ? weekEnd : shiftDate(rangeStart, 60);
   const query = useQuery({
     queryKey:
-      view === "agenda"
+      view === "agenda" && agendaMode === "day"
         ? ["admin-current-day", date]
         : ["admin-current-bookings", rangeStart, rangeEnd],
     queryFn: () =>
-      view === "agenda"
+      view === "agenda" && agendaMode === "day"
         ? fetchCurrentDay({ data: { date } })
         : fetchCurrentBookings({ data: { fromDate: rangeStart, toDate: rangeEnd } }),
     retry: false,
@@ -458,7 +462,11 @@ export function CurrentBookingsAdmin({
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
-              {view === "agenda" ? "Agenda diária" : "Gestão de reservas"}
+              {view === "agenda"
+                ? agendaMode === "day"
+                  ? "Agenda diária"
+                  : "Agenda semanal"
+                : "Gestão de reservas"}
             </p>
             <h2
               id="current-bookings-heading"
@@ -468,15 +476,39 @@ export function CurrentBookingsAdmin({
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {view === "agenda"
-                ? "Acompanhe as reservas do dia por unidade, quadra e horário."
+                ? "Acompanhe reservas por dia, unidade, quadra e horário."
                 : "Pesquise reservas online e bloqueios manuais nos próximos 60 dias."}
             </p>
           </div>
           {view === "agenda" ? (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="flex rounded-lg border border-border p-1"
+                role="group"
+                aria-label="Modo da agenda"
+              >
+                {(
+                  [
+                    ["day", "Dia"],
+                    ["week", "Semana"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={agendaMode === mode}
+                    onClick={() => setAgendaMode(mode)}
+                    className={`min-h-9 rounded-md px-3 text-sm font-semibold ${agendaMode === mode ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
-                onClick={() => setDate((current) => shiftDate(current, -1))}
+                onClick={() =>
+                  setDate((current) => shiftDate(current, agendaMode === "week" ? -7 : -1))
+                }
                 aria-label="Dia anterior"
                 className="grid h-11 w-11 place-items-center rounded-lg border border-border hover:border-primary"
               >
@@ -491,7 +523,9 @@ export function CurrentBookingsAdmin({
               />
               <button
                 type="button"
-                onClick={() => setDate((current) => shiftDate(current, 1))}
+                onClick={() =>
+                  setDate((current) => shiftDate(current, agendaMode === "week" ? 7 : 1))
+                }
                 aria-label="Próximo dia"
                 className="grid h-11 w-11 place-items-center rounded-lg border border-border hover:border-primary"
               >
@@ -513,7 +547,7 @@ export function CurrentBookingsAdmin({
         </div>
       </div>
       <div className="p-5 sm:p-7">
-        {view === "agenda" && (
+        {view === "agenda" && agendaMode === "day" && (
           <p className="mb-2 text-xs font-semibold capitalize text-muted-foreground">{dateText}</p>
         )}
         {query.isLoading ? (
@@ -548,7 +582,82 @@ export function CurrentBookingsAdmin({
                 ))}
               </div>
             )}
-            {view === "agenda" && (
+            {view === "agenda" && agendaMode === "week" && (
+              <div
+                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                aria-label="Agenda semanal, domingo a sábado"
+              >
+                {Array.from({ length: 7 }, (_, index) => {
+                  const day = shiftDate(weekStart, index);
+                  const dayLabel = new Intl.DateTimeFormat("pt-BR", {
+                    weekday: "long",
+                    day: "2-digit",
+                    month: "short",
+                    timeZone: "UTC",
+                  }).format(new Date(`${day}T12:00:00Z`));
+                  const dayBookings = groups.filter((booking) => booking.date === day);
+                  return (
+                    <section
+                      key={day}
+                      className="min-h-32 rounded-xl border border-border bg-background p-3"
+                    >
+                      <h3 className="mb-2 border-b border-border pb-2 text-sm font-bold capitalize">
+                        {dayLabel}
+                      </h3>
+                      {dayBookings.length === 0 ? (
+                        <p className="py-2 text-xs text-muted-foreground">Sem reservas</p>
+                      ) : (
+                        <ul className="space-y-2">
+                          {dayBookings.map((booking) => {
+                            const progress = paymentProgressPercentages(
+                              booking.amountCents,
+                              booking.receivedAmountCents,
+                            );
+                            const paymentMethodLabel = booking.paymentLabel
+                              .toLocaleLowerCase("pt-BR")
+                              .includes("pix")
+                              ? "PIX"
+                              : booking.paymentLabel.includes("InfinitePay")
+                                ? "InfinitePay"
+                                : "Pagamento";
+                            const payStatus = booking.isAdminManual
+                              ? "Bloqueio manual"
+                              : booking.paymentNeedsReview
+                                ? "Revisar pagamento"
+                                : booking.receivedAmountCents > 0
+                                  ? booking.balanceDueCents > 0
+                                    ? `${paymentMethodLabel} pago ${progress.receivedPercentage}% · falta ${progress.remainingPercentage}%`
+                                    : `${paymentMethodLabel} · pago 100%`
+                                  : STATUS_LABEL[booking.status];
+                            return (
+                              <li key={booking.code}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedBooking(booking)}
+                                  className="w-full rounded-lg border border-border px-3 py-2 text-left hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+                                >
+                                  <span className="block font-semibold">
+                                    {booking.name.trim().split(/\s+/u)[0]} ·{" "}
+                                    {formatSlotRanges(booking.slots)}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {booking.spaceName}
+                                  </span>
+                                  <span className="mt-1 block text-xs font-semibold">
+                                    {payStatus}
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+            {view === "agenda" && agendaMode === "day" && (
               <AdminAgendaGrid
                 date={date}
                 bookings={agendaBookings}
@@ -911,6 +1020,86 @@ export function CurrentBookingsAdmin({
           </>
         )}
       </div>
+      {selectedBooking && (
+        <dialog
+          open
+          aria-labelledby="booking-details-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedBooking(null);
+          }}
+          className="fixed inset-0 z-50 m-auto max-h-[85vh] w-[min(92vw,36rem)] overflow-auto rounded-2xl border border-border bg-background p-5 text-foreground shadow-2xl backdrop:bg-black/70"
+        >
+          <h2 id="booking-details-title" className="font-display text-2xl font-bold">
+            {selectedBooking.name}
+          </h2>
+          <p className="mt-2 text-sm">
+            {selectedBooking.phone} · {selectedBooking.code}
+          </p>
+          <p className="mt-1 text-sm">
+            {formatBookingDate(selectedBooking.date)} · {selectedBooking.spaceName} ·{" "}
+            {formatSlotRanges(selectedBooking.slots)}
+          </p>
+          <p className="mt-2 text-sm">
+            {selectedBooking.paymentLabel} ·{" "}
+            {selectedBooking.isAdminManual
+              ? "Bloqueio manual"
+              : selectedBooking.paymentNeedsReview
+                ? "Pagamento para revisão"
+                : selectedBooking.balanceDueCents > 0
+                  ? `Recebido ${formatBRL(selectedBooking.receivedAmountCents)} · saldo ${formatBRL(selectedBooking.balanceDueCents)}`
+                  : selectedBooking.status === "paid"
+                    ? "Pago 100%"
+                    : STATUS_LABEL[selectedBooking.status]}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {selectedBooking.paymentNeedsReview && (
+              <button
+                type="button"
+                onClick={() => {
+                  void act(selectedBooking, "confirm_received_payment");
+                  setSelectedBooking(null);
+                }}
+                className="rounded-full bg-success px-4 py-2 text-sm font-bold text-success-foreground"
+              >
+                Confirmar após revisão
+              </button>
+            )}
+            {selectedBooking.status === "pending" &&
+              !selectedBooking.paymentNeedsReview &&
+              !selectedBooking.isAdminManual && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void act(selectedBooking, "mark_paid");
+                    setSelectedBooking(null);
+                  }}
+                  className="rounded-full bg-success px-4 py-2 text-sm font-bold text-success-foreground"
+                >
+                  Confirmar pagamento
+                </button>
+              )}
+            {(selectedBooking.status === "pending" || selectedBooking.status === "paid") && (
+              <button
+                type="button"
+                onClick={() => {
+                  void act(selectedBooking, "cancel");
+                  setSelectedBooking(null);
+                }}
+                className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-semibold text-destructive"
+              >
+                Cancelar grupo
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelectedBooking(null)}
+              className="rounded-full border border-border px-4 py-2 text-sm"
+            >
+              Fechar
+            </button>
+          </div>
+        </dialog>
+      )}
       <dialog
         ref={cancelDialogRef}
         aria-labelledby="cancel-confirm-title"
