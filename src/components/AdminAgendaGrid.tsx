@@ -134,7 +134,7 @@ export function AdminAgendaGrid({
 }: AdminAgendaGridProps) {
   const [unitId, setUnitId] = useState<UnitId>("unidade-1");
   const [showNonBlocking, setShowNonBlocking] = useState(false);
-  const [rowHeight, setRowHeight] = useState(18);
+  const [rowHeight, setRowHeight] = useState(20);
   const [compactViewport, setCompactViewport] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const legendRef = useRef<HTMLUListElement>(null);
@@ -205,7 +205,7 @@ export function AdminAgendaGrid({
         scrollTop !== undefined
           ? (dockTop ?? viewportHeight - 58) - scrollTop - legendHeight - 24
           : viewportHeight - 430;
-      const nextHeight = Math.max(6, Math.min(18, (available - 24) / timeRows));
+      const nextHeight = Math.max(7, Math.min(20, (available - 24) / timeRows));
       setRowHeight((current) => (Math.abs(current - nextHeight) < 0.25 ? current : nextHeight));
     };
 
@@ -239,9 +239,7 @@ export function AdminAgendaGrid({
             checked={showNonBlocking}
             onChange={(event) => setShowNonBlocking(event.target.checked)}
           />
-          <span>
-            Mostrar checkouts e revisões <strong>(não bloqueiam)</strong>
-          </span>
+          <span>Mostrar pagamentos pendentes ou em análise (não ocupam horário)</span>
         </label>
       </div>
 
@@ -384,18 +382,19 @@ export function AdminAgendaGrid({
 
       <ul ref={legendRef} className="admin-agenda-legend" aria-label="Legenda da agenda">
         <li>
-          <span className="is-paid" /> Pagamento verificado
+          <span className="is-paid" /> Pagamento confirmado — horário ocupado
         </li>
         <li>
-          <span className="is-manual" /> Bloqueio manual Master
+          <span className="is-manual" /> Reserva manual do Master — horário bloqueado
         </li>
         {showNonBlocking && (
           <li>
-            <span className="is-pending" /> Checkout/revisão pendente · não bloqueia
+            <span className="is-pending" /> Pagamento pendente ou em análise — ainda não ocupa
+            horário
           </li>
         )}
         <li>
-          <span className="is-closed" /> Fora do funcionamento cadastrado
+          <span className="is-closed" /> Quadra fora do horário de funcionamento cadastrado
         </li>
       </ul>
     </section>

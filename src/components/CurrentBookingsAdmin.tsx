@@ -553,6 +553,11 @@ export function CurrentBookingsAdmin({
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(`${date}T12:00:00Z`));
+  const periodMonthText = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${date.slice(0, 7)}-01T12:00:00Z`));
 
   return (
     <section
@@ -584,6 +589,11 @@ export function CurrentBookingsAdmin({
                 ? "Acompanhe reservas por dia, unidade, quadra e horário."
                 : "Pesquise reservas online e bloqueios manuais nos próximos 60 dias."}
             </p>
+            {view === "agenda" && (
+              <p className="admin-agenda-period-label" aria-live="polite">
+                {periodMonthText}
+              </p>
+            )}
           </div>
           {view === "agenda" ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -1198,8 +1208,9 @@ export function CurrentBookingsAdmin({
                     ) : (
                       <Plus className="h-4 w-4" aria-hidden="true" />
                     )}
-                    Criar e bloquear
+                    Efetuar reserva
                   </button>
+                  <p className="admin-manual-submit-note">(o horário reservado será bloqueado)</p>
                 </div>
               </form>
             )}
