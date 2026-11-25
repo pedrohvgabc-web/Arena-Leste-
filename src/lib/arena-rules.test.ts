@@ -224,53 +224,76 @@ describe("preço normal e promoção de reservas", () => {
       promoApplied: false,
     });
   });
-  it("aplica R$40/h de domingo a quarta acima de duas horas no Pix", () => {
-    expect(promotionalHourlyRateCents("2026-11-15", "pix", 180)).toBe(4_000);
-    expect(calculateBookingPrice(6_000, 60, 1, "2026-11-17", "card_onsite", 120)).toEqual({
-      perSlotCents: 12_000,
-      totalCents: 12_000,
+  it("cobra R$60 na primeira hora e R$40 por hora adicional de domingo a quarta", () => {
+    expect(promotionalHourlyRateCents("2026-11-15", "pix", 120)).toBe(4_000);
+    expect(calculateBookingPrice(5_000, 60, 1, "2026-11-17", "pix")).toEqual({
+      perSlotCents: 6_000,
+      totalCents: 6_000,
       promoApplied: false,
     });
-    expect(calculateBookingPrice(6_000, 60, 2, "2026-11-17", "pix", 240)).toEqual({
-      perSlotCents: 8_000,
-      totalCents: 16_000,
+    expect(calculateBookingPrice(6_000, 60, 2, "2026-11-17", "pix")).toEqual({
+      perSlotCents: 5_000,
+      totalCents: 10_000,
       promoApplied: true,
     });
-    expect(calculateBookingPrice(9_000, 90, 2)).toEqual({
-      perSlotCents: 9_000,
-      totalCents: 18_000,
-      promoApplied: false,
+    expect(calculateBookingPrice(6_000, 60, 3, "2026-11-17", "cash_onsite")).toEqual({
+      perSlotCents: 4_667,
+      totalCents: 14_000,
+      promoApplied: true,
     });
   });
-  it("aplica R$45/h de quinta a sábado no dinheiro e não no cartão", () => {
+  it("cobra R$60 na primeira hora e R$45/h adicional de quinta a sábado, sem janela especial", () => {
     expect(promotionalHourlyRateCents("2026-11-19", "cash_onsite", 180)).toBe(4_500);
     expect(promotionalHourlyRateCents("2026-11-19", "card_onsite", 180)).toBeNull();
-    expect(calculateBookingPrice(15_001, 180, 1)).toEqual({
-      perSlotCents: 15_001,
-      totalCents: 15_001,
+    expect(calculateBookingPrice(6_000, 60, 1, "2026-11-19", "cash_onsite")).toEqual({
+      perSlotCents: 6_000,
+      totalCents: 6_000,
       promoApplied: false,
     });
-    expect(calculateBookingPrice(6_000, 60, 3, "2026-11-15", "pix")).toEqual({
-      perSlotCents: 4_000,
-      totalCents: 12_000,
-      promoApplied: true,
-    });
-  });
-
-  it("cobra R$90 por duas horas nas faixas 19–21 e 21–23 de quinta a sábado no Pix ou dinheiro", () => {
+    // A antiga exceção de R$90 para 19h–21h agora segue a regra geral: R$60 + R$45.
     expect(
       calculateBookingPrice(6_000, 60, 2, "2026-11-19", "pix", 120, ["19:00", "20:00"]),
-    ).toEqual({ perSlotCents: 4_500, totalCents: 9_000, promoApplied: true });
-    expect(
-      calculateBookingPrice(6_000, 60, 2, "2026-11-21", "cash_onsite", 120, ["21:00", "22:00"]),
-    ).toEqual({ perSlotCents: 4_500, totalCents: 9_000, promoApplied: true });
+    ).toEqual({ perSlotCents: 5_250, totalCents: 10_500, promoApplied: true });
+    expect(calculateBookingPrice(6_000, 60, 3, "2026-11-21", "cash_onsite")).toEqual({
+      perSlotCents: 5_000,
+      totalCents: 15_000,
+      promoApplied: true,
+    });
     expect(
       calculateBookingPrice(6_000, 60, 2, "2026-11-19", "pix", 120, ["18:00", "19:00"]).totalCents,
-    ).toBe(12_000);
+    ).toBe(10_500);
+  });
+  it("preserva métodos não elegíveis e aplica a primeira hora promocional fixa", () => {
+    for (const method of ["card_onsite", "admin_manual"] as const) {
+      expect(promotionalHourlyRateCents("2026-11-19", method, 180)).toBeNull();
+    }
+    expect(calculateBookingPrice(5_000, 60, 1, "2026-11-19", "card_onsite")).toEqual({
+      perSlotCents: 5_000,
+      totalCents: 5_000,
+      promoApplied: false,
+    });
+    expect(calculateBookingPrice(6_000, 60, 2, "2026-11-19", "card_onsite")).toEqual({
+      perSlotCents: 6_000,
+      totalCents: 12_000,
+      promoApplied: false,
+    });
+  });
+  it("arredonda adicional em centavos de forma determinística para slots fracionários", () => {
     expect(
-      calculateBookingPrice(6_000, 60, 2, "2026-11-19", "card_onsite", 120, ["19:00", "20:00"])
-        .totalCents,
-    ).toBe(12_000);
+      calculateBookingPrice(6_000, 30, 3, "2026-11-17", "pix", 90, ["19:00", "19:30", "20:00"]),
+    ).toEqual({
+      perSlotCents: 2_667,
+      totalCents: 8_000,
+      promoApplied: true,
+    });
+    expect(
+      calculateBookingPrice(6_000, 30, 4, "2026-11-19", "pix", 120, [
+        "18:00",
+        "18:30",
+        "19:00",
+        "19:30",
+      ]).totalCents,
+    ).toBe(10_500);
   });
 
   it("não dá desconto a dois slots de 30 min que somam exatamente uma hora", () => {

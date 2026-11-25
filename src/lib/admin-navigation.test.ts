@@ -23,6 +23,7 @@ describe("navegação orientada do Admin", () => {
       "overview",
       "reservations",
       "hours",
+      "finance",
     ]);
     expect(modulesForRole("midia").map(({ id }) => id)).toEqual([
       "agenda",

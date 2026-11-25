@@ -670,6 +670,7 @@ export const createBooking = createServerFn({ method: "POST" })
         if (!Number.isSafeInteger(pricing.totalCents) || pricing.totalCents <= 0) {
           return { code: null, error: "Não foi possível calcular o valor desta reserva." };
         }
+        const bookingShares = splitAmountCents(pricing.totalCents, slots.length);
         const chargeAmount = initialPaymentCents(pricing.totalCents, paymentPlan);
         if (!Number.isSafeInteger(chargeAmount) || chargeAmount <= 0) {
           return { code: null, error: "O valor da cobrança precisa ser maior que zero." };
@@ -691,7 +692,7 @@ export const createBooking = createServerFn({ method: "POST" })
               ${slot.start}::time, ${slot.end}::time, ${name}, ${phone},
               ${index === 0 ? cpf : null}, ${index === 0 ? address : null},
               ${index === 0 ? privacyConsentAt : null}::timestamptz,
-              ${data.method}, ${pricing.perSlotCents}, ${expires}::timestamptz,
+              ${data.method}, ${bookingShares[index] ?? pricing.perSlotCents}, ${expires}::timestamptz,
               ${data.notes || null}
             ) RETURNING id
           `) as unknown as InsertedBookingRow[];
@@ -2188,7 +2189,9 @@ export const adminUpdateBooking = createServerFn({ method: "POST" })
           WHERE group_code = ${booking.group_code} AND payment_status = 'pending'
         `;
           await tx`
-          UPDATE public.payments SET status = 'paid', paid_at = ${now}::timestamptz, updated_at = ${now}::timestamptz
+          UPDATE public.payments
+          SET status = 'paid', provider = 'onsite', is_simulated = false,
+            paid_at = ${now}::timestamptz, updated_at = ${now}::timestamptz
           WHERE booking_id IN (
             SELECT id FROM public.bookings WHERE group_code = ${booking.group_code} AND payment_status = 'paid'
           )
@@ -2564,6 +2567,138 @@ export const adminExportOperationalData = createServerFn({ method: "POST" })
         weeklyHours: hours,
         bookings,
         tournamentRegistrations: registrations,
+      },
+    };
+  });
+
+const financeReportInput = z.object({
+  period: z.enum(["day", "week", "month"]),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((value) => {
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    }, "Data inválida."),
+});
+
+function addFinanceCalendarDays(date: string, days: number) {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function financeReportRange(period: "day" | "week" | "month", date: string) {
+  if (period === "day") return { start: date, end: addFinanceCalendarDays(date, 1) };
+  if (period === "month") {
+    const start = `${date.slice(0, 7)}-01`;
+    const nextMonth = new Date(`${start}T00:00:00.000Z`);
+    nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+    return { start, end: nextMonth.toISOString().slice(0, 10) };
+  }
+  const weekday = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+  const start = addFinanceCalendarDays(date, -((weekday + 6) % 7));
+  return { start, end: addFinanceCalendarDays(start, 7) };
+}
+
+/**
+ * Relatório financeiro read-only. Os valores vêm exclusivamente de payments.amount_cents;
+ * linhas por slot são agregadas antes do JOIN de reservas para não multiplicar o giro.
+ */
+export const adminFinanceReport = createServerFn({ method: "GET" })
+  .inputValidator(financeReportInput)
+  .handler(async ({ data }) => {
+    const { requireAdminRole } = await import("./admin-auth.server");
+    await requireAdminRole(["master", "caixa"]);
+    const { start, end } = financeReportRange(data.period, data.date);
+    const db = await database();
+    const rows = (await db`
+      WITH group_refs AS (
+        SELECT b.group_code, p.provider, MAX(p.transaction_nsu) AS transaction_nsu,
+          MAX(p.provider_ref) AS provider_ref
+        FROM public.payments p
+        INNER JOIN public.bookings b ON b.id = p.booking_id
+        GROUP BY b.group_code, p.provider
+      ), eligible AS (
+        SELECT p.booking_id, p.provider, p.method, p.paid_at, p.amount_cents,
+          b.group_code, b.customer_name,
+          COALESCE(p.transaction_nsu, p.provider_ref, gr.transaction_nsu,
+            gr.provider_ref, b.group_code) AS transaction_key
+        FROM public.payments p
+        INNER JOIN public.bookings b ON b.id = p.booking_id
+        LEFT JOIN group_refs gr ON gr.group_code = b.group_code AND gr.provider = p.provider
+        WHERE p.status = 'paid'
+          AND p.paid_at IS NOT NULL
+          AND p.provider IN ('infinitepay', 'onsite')
+          AND p.is_simulated = false
+          AND b.payment_status = 'paid'
+          AND COALESCE(b.is_admin_manual, false) = false
+          AND p.paid_at >= (${start}::date::timestamp AT TIME ZONE 'America/Porto_Velho')
+          AND p.paid_at < (${end}::date::timestamp AT TIME ZONE 'America/Porto_Velho')
+      ), payments_grouped AS (
+        SELECT provider, method, transaction_key, group_code, MAX(paid_at) AS paid_at,
+          SUM(amount_cents)::bigint AS amount_cents,
+          (ARRAY_AGG(customer_name ORDER BY booking_id))[1] AS customer_name
+        FROM eligible
+        GROUP BY provider, method, transaction_key, group_code
+      )
+      SELECT pg.provider, pg.method,
+        pg.paid_at::text AS paid_at, pg.amount_cents::bigint AS amount_cents,
+        pg.customer_name,
+        COALESCE((
+          SELECT json_agg(reservation ORDER BY reservation->>'date', reservation->>'start')
+          FROM (
+            SELECT DISTINCT jsonb_build_object(
+              'date', b.booking_date::text,
+              'start', to_char(b.start_time, 'HH24:MI'),
+              'end', to_char(b.end_time, 'HH24:MI'),
+              'court', COALESCE(s.name, 'Quadra não cadastrada'),
+              'unit', COALESCE(s.unit_id, 'Unidade não informada')
+            ) AS reservation
+            FROM public.bookings b
+            LEFT JOIN public.arena_spaces s ON s.id = b.space_id
+            WHERE b.group_code = pg.group_code AND b.payment_status = 'paid'
+              AND COALESCE(b.is_admin_manual, false) = false
+          ) reservations
+        ), '[]'::json) AS bookings
+      FROM payments_grouped pg
+      ORDER BY pg.paid_at, pg.customer_name, pg.transaction_key
+    `) as unknown as Array<{
+      provider: string;
+      method: string;
+      paid_at: string;
+      amount_cents: number | string;
+      customer_name: string;
+      bookings: Array<{
+        date: string;
+        start: string;
+        end: string;
+        court: string;
+        unit: string;
+      }>;
+    }>;
+    const payments = rows.map((row) => ({
+      provider: row.provider,
+      method: row.method,
+      paidAt: row.paid_at,
+      amountCents: Number(row.amount_cents),
+      customerName: row.customer_name,
+      bookings: row.bookings,
+    }));
+    return {
+      period: data.period,
+      startDate: start,
+      endDateExclusive: end,
+      timeZone: "America/Porto_Velho" as const,
+      payments,
+      totalCents: payments.reduce((total, payment) => total + payment.amountCents, 0),
+      subtotals: {
+        infinitepayCents: payments
+          .filter((payment) => payment.provider === "infinitepay")
+          .reduce((sum, payment) => sum + payment.amountCents, 0),
+        onsiteCents: payments
+          .filter((payment) => payment.provider === "onsite")
+          .reduce((sum, payment) => sum + payment.amountCents, 0),
       },
     };
   });

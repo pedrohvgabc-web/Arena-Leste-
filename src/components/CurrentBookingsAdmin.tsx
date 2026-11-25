@@ -932,7 +932,7 @@ export function CurrentBookingsAdmin({
                       return (
                         <li
                           key={booking.code}
-                          className="rounded-2xl border border-border bg-background p-4 sm:p-5"
+                          className="admin-reservation-card rounded-2xl border border-border bg-background p-3 sm:p-4"
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>

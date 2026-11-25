@@ -2268,6 +2268,80 @@ select:focus-visible {
   font: 800 0.62rem/1 var(--fm);
   font-variant-numeric: tabular-nums;
 }
+
+/* Navegação administrativa: estados em laranja, sem placas brancas no drawer. */
+.adm.admin-workspace nav#sbn .sbi,
+.admin-mobile-drawer-panel .sbi {
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgb(255 255 255 / 90%);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+.adm.admin-workspace nav#sbn .sbi:hover,
+.admin-mobile-drawer-panel .sbi:hover {
+  border-color: rgb(255 214 173 / 45%);
+  background: color-mix(in srgb, #9f3d0c 34%, var(--ac));
+  color: #fff;
+}
+.adm.admin-workspace nav#sbn .sbi[aria-current="page"],
+.admin-mobile-drawer-panel .sbi[aria-current="page"] {
+  border-color: rgb(255 224 196 / 72%);
+  background: color-mix(in srgb, #7f3008 38%, var(--ac));
+  box-shadow: inset 3px 0 #ffd2a8;
+  color: #fff;
+}
+.adm.admin-workspace nav#sbn .sbi:focus-visible,
+.admin-mobile-drawer-panel .sbi:focus-visible,
+.admin-drawer-close:focus-visible,
+.admin-mobile-menu-button:focus-visible,
+.admin-drawer-site-link:focus-visible {
+  outline: 3px solid #ffe0c4;
+  outline-offset: 3px;
+}
+.admin-mobile-drawer-panel {
+  background: color-mix(in srgb, var(--ac) 86%, #8a330a);
+}
+.admin-drawer-close {
+  border-color: rgb(255 224 196 / 58%);
+  background: color-mix(in srgb, #8a330a 30%, var(--ac));
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.admin-drawer-close:hover,
+.admin-mobile-menu-button:hover {
+  border-color: rgb(255 224 196 / 85%);
+  background: color-mix(in srgb, #7f3008 42%, var(--ac));
+}
+.admin-reservation-card {
+  display: grid;
+  gap: 0.7rem;
+}
+.admin-reservation-card > div:first-child p + p {
+  margin-top: 0.15rem;
+}
+.admin-reservation-card > div:last-child {
+  gap: 0.45rem;
+  padding-top: 0.55rem;
+}
+.admin-reservation-card > div:last-child > div:last-child {
+  gap: 0.4rem;
+}
+.admin-reservation-card > div:last-child a,
+.admin-reservation-card > div:last-child button {
+  min-height: 2.5rem;
+  padding-inline: 0.8rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .adm.admin-workspace nav#sbn .sbi,
+  .admin-mobile-drawer-panel .sbi,
+  .admin-drawer-close {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+  }
+}
 @media (max-width: 40rem) {
   .hero-monthly-cta {
     width: min(100%, 23rem);

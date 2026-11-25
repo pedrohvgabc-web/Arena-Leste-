@@ -4,12 +4,7 @@ import { ArrowRight, CalendarDays, Clock3, Loader2, Trophy } from "lucide-react"
 import { AdminAnalytics } from "@/components/AdminAnalytics";
 import { adminDashboardSummary } from "@/lib/arena.functions";
 import type { AdminDashboardDailyPoint, AdminDashboardStatusPoint } from "@/lib/admin-dashboard";
-import {
-  ADMIN_MODULES,
-  moduleCapabilitiesForRole,
-  type AdminModuleId,
-  type AdminRole,
-} from "@/lib/admin-navigation";
+import type { AdminModuleId } from "@/lib/admin-navigation";
 import { SITE } from "@/lib/site";
 
 type Summary = {
@@ -35,8 +30,7 @@ type Summary = {
 
 type AdminOverviewProps = {
   onNavigate: (module: AdminModuleId) => void;
-  allowedModules?: AdminModuleId[];
-  role?: AdminRole;
+  allowedModules: AdminModuleId[];
 };
 
 function formatDate(date: string) {
@@ -49,7 +43,7 @@ function formatDate(date: string) {
   }).format(new Date(Date.UTC(year ?? 2026, (month ?? 1) - 1, day ?? 1, 12)));
 }
 
-export function AdminOverview({ onNavigate, allowedModules, role }: AdminOverviewProps) {
+export function AdminOverview({ onNavigate, allowedModules }: AdminOverviewProps) {
   const fetchSummary = useServerFn(adminDashboardSummary);
   const query = useQuery({
     queryKey: ["admin-dashboard-summary"],
@@ -189,66 +183,6 @@ export function AdminOverview({ onNavigate, allowedModules, role }: AdminOvervie
                   })}
                 </ul>
               )}
-            </div>
-
-            <div>
-              <h3 className="border-b border-border pb-3 font-display text-xl font-bold uppercase sm:text-2xl">
-                Acesso rápido
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Cada cartão explica uma área e leva direto para ela. Você verá somente o que seu
-                acesso permite.
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                {ADMIN_MODULES.filter(
-                  (item) =>
-                    item.id !== "overview" &&
-                    (allowedModules ? allowedModules.includes(item.id) : true),
-                ).map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <article
-                      key={item.id}
-                      className="flex min-w-0 flex-col rounded-2xl border border-border bg-card/45 p-4"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                          <Icon className="h-5 w-5" aria-hidden="true" />
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-[0.68rem] font-bold uppercase tracking-wider text-primary">
-                            {item.group}
-                          </p>
-                          <h4 className="mt-0.5 font-semibold leading-tight">{item.label}</h4>
-                        </div>
-                      </div>
-                      <p className="mt-3 flex-1 text-sm leading-relaxed text-muted-foreground">
-                        {item.description}
-                      </p>
-                      <ul className="mt-3 space-y-1 text-xs leading-relaxed text-muted-foreground">
-                        {moduleCapabilitiesForRole(item, role).map((capability) => (
-                          <li key={capability} className="flex items-start gap-2">
-                            <span className="mt-0.5 font-bold text-primary" aria-hidden="true">
-                              ·
-                            </span>
-                            <span>{capability}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="mt-3 border-t border-border pt-3 text-xs leading-relaxed">
-                        <strong>Comece por:</strong> {item.firstStep}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => onNavigate(item.id)}
-                        className="mt-3 inline-flex min-h-11 w-full items-center justify-between rounded-lg border border-primary/30 px-3 text-left text-sm font-bold text-primary hover:bg-primary/10"
-                      >
-                        Abrir {item.label} <ArrowRight className="h-4 w-4 shrink-0" />
-                      </button>
-                    </article>
-                  );
-                })}
-              </div>
             </div>
           </div>
         </>

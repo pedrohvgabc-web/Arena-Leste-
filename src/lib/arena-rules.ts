@@ -267,7 +267,7 @@ export const totalCents = (priceCents: number, count: number) => priceCents * Ma
 export const WEEKDAY_PROMO_RATE_CENTS_PER_HOUR = 4_000;
 export const THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR = 4_500;
 
-/** Promoção da Arena: somente acima de 2h, no Pix ou dinheiro. */
+/** Tarifa promocional das horas adicionais, elegível no Pix ou dinheiro. */
 export function promotionalHourlyRateCents(
   dateISO: string | undefined,
   method: PaymentMethod | undefined,
@@ -276,23 +276,8 @@ export function promotionalHourlyRateCents(
   slotMinutes = 60,
 ) {
   if (!dateISO || !method || !["pix", "cash_onsite"].includes(method)) return null;
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= SLOT_MINUTES) return null;
   const weekday = weekdayOf(dateISO);
-  if (
-    durationMinutes === 2 * 60 &&
-    weekday >= 4 &&
-    weekday <= 6 &&
-    Number.isInteger(slotMinutes) &&
-    slotMinutes > 0 &&
-    120 % slotMinutes === 0 &&
-    slotStarts?.length === 120 / slotMinutes
-  ) {
-    const starts = slotStarts.map(toMin).sort((a, b) => a - b);
-    const includesPromoWindow = [19 * 60, 21 * 60].some((windowStart) =>
-      starts.every((start, index) => start === windowStart + index * slotMinutes),
-    );
-    if (includesPromoWindow) return THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR;
-  }
-  if (durationMinutes <= 2 * 60) return null;
   return weekday >= 0 && weekday <= 3
     ? WEEKDAY_PROMO_RATE_CENTS_PER_HOUR
     : THURSDAY_TO_SATURDAY_PROMO_RATE_CENTS_PER_HOUR;
@@ -321,10 +306,19 @@ export function calculateBookingPrice(
     slotMinutes,
   );
   const promoApplied = arenaPromoRate !== null;
+  const firstHourBaseApplies =
+    totalDurationMinutes >= SLOT_MINUTES &&
+    Boolean(dateISO) &&
+    (method === "pix" || method === "cash_onsite");
+  // Eligible reservations have a fixed R$60 first hour; the day-specific promo
+  // rate applies only to the remaining duration. Round the additional amount
+  // once in integer cents so fractional-hour slots remain deterministic.
   const totalCents =
     arenaPromoRate !== null
-      ? Math.round((arenaPromoRate * totalDurationMinutes) / 60)
-      : Math.round((regularPrice * totalDurationMinutes) / slotMinutes);
+      ? 6_000 + Math.round((arenaPromoRate * (totalDurationMinutes - SLOT_MINUTES)) / 60)
+      : firstHourBaseApplies
+        ? 6_000
+        : Math.round((regularPrice * totalDurationMinutes) / slotMinutes);
 
   return { perSlotCents: Math.round(totalCents / quantity), totalCents, promoApplied };
 }

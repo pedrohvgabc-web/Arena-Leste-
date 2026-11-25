@@ -5,6 +5,7 @@ import {
   Clock3,
   ContactRound,
   Database,
+  Wallet,
   LayoutDashboard,
   Images,
   LayoutGrid,
@@ -23,6 +24,7 @@ export type AdminModuleId =
   | "tournament"
   | "contact"
   | "backup"
+  | "finance"
   | "gallery"
   | "legacy"
   | "audit"
@@ -163,6 +165,19 @@ export const ADMIN_MODULES: AdminModuleInfo[] = [
     firstStep: "Leia o aviso exibido e só então solicite o arquivo de backup.",
   },
   {
+    id: "finance",
+    label: "Financeiro",
+    icon: Wallet,
+    group: "Administração",
+    description: "Consulte pagamentos confirmados e baixe o giro diário, semanal ou mensal.",
+    capabilities: [
+      "Filtrar por dia, semana ou mês",
+      "Ver a data e hora do pagamento e os dados da reserva",
+      "Baixar relatório PDF com totais por origem",
+    ],
+    firstStep: "Escolha o período e a data de referência; depois gere e baixe o relatório.",
+  },
+  {
     id: "legacy",
     label: "Histórico legado",
     icon: Archive,
@@ -214,6 +229,7 @@ export const ADMIN_MODULE_ROLES: Record<AdminModuleId, AdminRole[]> = {
   tournament: ["master", "midia"],
   contact: ["master"],
   backup: ["master"],
+  finance: ["master", "caixa"],
   gallery: ["master", "midia"],
   legacy: ["master"],
   audit: ["master"],

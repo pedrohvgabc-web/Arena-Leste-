@@ -937,12 +937,13 @@ function Reservar() {
                       Não perca essa oportunidade: aproveite a promoção!
                     </h3>
                     <p>
-                      Reserve mais de 2 horas e pague <strong>R$ 40/h de domingo a quarta</strong>{" "}
-                      ou <strong>R$ 45/h de quinta a sábado</strong>, no Pix ou dinheiro.
+                      No Pix ou dinheiro, pague <strong>R$60 na primeira hora</strong> e, a partir
+                      da segunda, <strong>R$ 40/h de domingo a quarta</strong> ou{" "}
+                      <strong> R$ 45/h de quinta a sábado</strong>.
                     </p>
                     <p className="booking-promo-summary__note">
-                      Base: R$60/h. Exatamente 2h de quinta a sábado, nas faixas 19h–21h ou 21h–23h:
-                      R$90 no Pix ou dinheiro.
+                      A tarifa promocional vale para as horas adicionais; horários disponíveis
+                      seguem a grade da unidade.
                     </p>
                   </div>
                   <button
@@ -1518,13 +1519,13 @@ function Reservar() {
           <p id="booking-promo-description" className="booking-promo-dialog__lead">
             {promoAvailable
               ? `Boa! Sua seleção ativou ${formatBRL(promoHourlyRateCents)} por hora no ${paymentMethod === "pix" ? "Pix" : "dinheiro"}.`
-              : "Reserve mais de 2 horas e escolha Pix ou dinheiro para pagar menos."}
+              : "No Pix ou dinheiro, a primeira hora custa R$60; a tarifa promocional vale para cada hora adicional."}
           </p>
           <section
             className="booking-promo-dialog__offer"
             aria-label="Tarifa promocional por duração"
           >
-            <h3>Mais de 2 horas · Pix ou dinheiro</h3>
+            <h3>Primeira hora R$60 · horas adicionais no Pix ou dinheiro</h3>
             <div className="booking-promo-dialog__daily-rates">
               <div>
                 <span>Domingo a quarta</span>
@@ -1533,11 +1534,11 @@ function Reservar() {
               <div>
                 <span>Quinta a sábado</span>
                 <strong>R$ 45/h</strong>
-                <small>Acima de 2 horas</small>
+                <small>Por hora adicional</small>
               </div>
             </div>
             <p className="booking-promo-dialog__two-hour-note">
-              Exatamente 2h: quinta a sábado, 19h–21h ou 21h–23h por R$ 90 no Pix ou dinheiro.
+              Exemplo: 2h custam R$100 de domingo a quarta e R$105 de quinta a sábado.
             </p>
           </section>
           <section

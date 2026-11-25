@@ -33,6 +33,7 @@ import { TournamentRegistrationsAdmin } from "@/components/TournamentRegistratio
 import { ArenaSettingsAdmin } from "@/components/ArenaSettingsAdmin";
 import { CurrentBookingsAdmin } from "@/components/CurrentBookingsAdmin";
 import { AdminOverview } from "@/components/AdminOverview";
+import { AdminFinanceReport } from "@/components/AdminFinanceReport";
 import { AdminDataBackup } from "@/components/AdminDataBackup";
 import { MasterPushNotifications } from "@/components/MasterPushNotifications";
 import { PhotoGalleryAdmin } from "@/components/PhotoGalleryAdmin";
@@ -462,34 +463,37 @@ function Dashboard({
           </span>
         </div>
         <div id="admin-module-content" className="swap">
-          {activeModuleInfo && activeModuleId !== "overview" && activeModuleId !== "agenda" && (
-            <section
-              className="admin-module-guide"
-              aria-label={`Orientação: ${activeModuleInfo.label}`}
-            >
-              <div className="admin-module-guide-intro">
-                <p className="admin-guide-eyebrow">
-                  {activeModuleInfo.group} · O que você pode fazer
-                </p>
-                <p className="admin-guide-description">{activeModuleInfo.description}</p>
-                <p className="admin-guide-first-step">
-                  <strong>Para começar:</strong> {activeModuleInfo.firstStep}
-                </p>
-              </div>
-              <ul className="admin-guide-actions" aria-label="Ações disponíveis nesta área">
-                {moduleCapabilitiesForRole(activeModuleInfo, actor.role).map((capability) => (
-                  <li key={capability}>{capability}</li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {activeModuleInfo &&
+            activeModuleId !== "overview" &&
+            activeModuleId !== "agenda" &&
+            activeModuleId !== "reservations" && (
+              <section
+                className="admin-module-guide"
+                aria-label={`Orientação: ${activeModuleInfo.label}`}
+              >
+                <div className="admin-module-guide-intro">
+                  <p className="admin-guide-eyebrow">
+                    {activeModuleInfo.group} · O que você pode fazer
+                  </p>
+                  <p className="admin-guide-description">{activeModuleInfo.description}</p>
+                  <p className="admin-guide-first-step">
+                    <strong>Para começar:</strong> {activeModuleInfo.firstStep}
+                  </p>
+                </div>
+                <ul className="admin-guide-actions" aria-label="Ações disponíveis nesta área">
+                  {moduleCapabilitiesForRole(activeModuleInfo, actor.role).map((capability) => (
+                    <li key={capability}>{capability}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
           {activeModuleId === "overview" && (
             <AdminOverview
               allowedModules={allowedModules.map((module) => module.id)}
-              role={actor.role}
               onNavigate={navigateToModule}
             />
           )}
+          {activeModuleId === "finance" && <AdminFinanceReport />}
           {activeModuleId === "agenda" && (
             <CurrentBookingsAdmin
               view="agenda"
