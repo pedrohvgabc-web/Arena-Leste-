@@ -134,7 +134,7 @@ export function AdminAgendaGrid({
 }: AdminAgendaGridProps) {
   const [unitId, setUnitId] = useState<UnitId>("unidade-1");
   const [showNonBlocking, setShowNonBlocking] = useState(false);
-  const [rowHeight, setRowHeight] = useState(20);
+  const [rowHeight, setRowHeight] = useState(22);
   const [compactViewport, setCompactViewport] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const legendRef = useRef<HTMLUListElement>(null);
@@ -167,6 +167,7 @@ export function AdminAgendaGrid({
   const endCandidates = [
     ...windows.map((window) => toMin(window.end)),
     ...ranges.map((range) => toMin(range.end)),
+    24 * 60,
   ];
   const start = startCandidates.length ? Math.floor(Math.min(...startCandidates) / 15) * 15 : null;
   const end = endCandidates.length ? Math.ceil(Math.max(...endCandidates) / 15) * 15 : null;
@@ -184,7 +185,7 @@ export function AdminAgendaGrid({
   const templateColumns = compactViewport
     ? `2.65rem repeat(${Math.max(unitSpaces.length, 1)}, minmax(0, 1fr))`
     : `4.35rem repeat(${Math.max(unitSpaces.length, 1)}, minmax(9.5rem, 1fr))`;
-  const templateRows = `${compactViewport ? "1.5rem" : "2.35rem"} repeat(${timeRows}, ${rowHeight}px)`;
+  const templateRows = `${compactViewport ? "1.5rem" : "2.35rem"} repeat(${timeRows}, ${rowHeight}px) 1.35rem`;
 
   useLayoutEffect(() => {
     const updateScale = () => {
@@ -205,7 +206,7 @@ export function AdminAgendaGrid({
         scrollTop !== undefined
           ? (dockTop ?? viewportHeight - 58) - scrollTop - legendHeight - 24
           : viewportHeight - 430;
-      const nextHeight = Math.max(7, Math.min(20, (available - 24) / timeRows));
+      const nextHeight = Math.max(18, Math.min(24, (available - 24) / timeRows));
       setRowHeight((current) => (Math.abs(current - nextHeight) < 0.25 ? current : nextHeight));
     };
 
@@ -353,6 +354,14 @@ export function AdminAgendaGrid({
                 );
               });
             })}
+            {timeRows > 0 && (
+              <span
+                className="admin-agenda-end-time"
+                style={{ gridRow: timeRows + 2, gridColumn: 1 }}
+              >
+                00:00
+              </span>
+            )}
             {showNow && (
               <>
                 <span

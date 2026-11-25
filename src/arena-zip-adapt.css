@@ -2219,6 +2219,8 @@ select:focus-visible {
   text-align: right;
 }
 .hero-monthly-cta {
+  box-sizing: border-box;
+  max-width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2229,6 +2231,7 @@ select:focus-visible {
   font-weight: 850;
   line-height: 1.2;
   text-align: left;
+  white-space: normal;
   box-shadow: 0 8px 24px rgb(37 211 102 / 30%);
   transition:
     transform 180ms ease,
@@ -2245,6 +2248,25 @@ select:focus-visible {
   height: 1.45rem;
   flex: 0 0 auto;
   fill: currentColor;
+}
+.hero-monthly-cta span {
+  min-width: 0;
+  flex: 1 1 0%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.admin-agenda-end-time {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--bd);
+  background: var(--sf);
+  color: var(--ac);
+  font: 800 0.62rem/1 var(--fm);
+  font-variant-numeric: tabular-nums;
 }
 @media (max-width: 40rem) {
   .hero-monthly-cta {
