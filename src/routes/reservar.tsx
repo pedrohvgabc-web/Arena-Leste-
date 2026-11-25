@@ -104,7 +104,7 @@ type BookingResult = {
 type BookingDraft = { name: string; phone: string; cpf: string; address: string; notes: string };
 
 const UNIT_IDS: UnitId[] = ["unidade-1", "unidade-2"];
-const METHODS: Array<{ value: PaymentMethod; label: string }> = [
+const METHODS: Array<{ value: Exclude<PaymentMethod, "admin_manual">; label: string }> = [
   { value: "pix", label: "Pix demonstrativo · sem cobrança real" },
   { value: "card_onsite", label: "Cartão no local" },
   { value: "cash_onsite", label: "Dinheiro no local" },
@@ -145,8 +145,8 @@ function formatSlot(slot: { start: string; end: string }) {
 }
 
 function slotDurationMinutes(slot: { start: string; end: string }) {
-  const [startHour, startMinute] = slot.start.split(":").map(Number);
-  const [endHour, endMinute] = slot.end.split(":").map(Number);
+  const [startHour = 0, startMinute = 0] = slot.start.split(":").map(Number);
+  const [endHour = 0, endMinute = 0] = slot.end.split(":").map(Number);
   return endHour * 60 + endMinute - (startHour * 60 + startMinute);
 }
 
@@ -195,7 +195,7 @@ function Reservar() {
   const [date, setDate] = useState<string | null>(null);
   const [starts, setStarts] = useState<string[]>([]);
   const [releasedOfferId, setReleasedOfferId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
+  const [paymentMethod, setPaymentMethod] = useState<Exclude<PaymentMethod, "admin_manual">>("pix");
   const [idempotencyKey, setIdempotencyKey] = useState(() => globalThis.crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1117,7 +1117,11 @@ function Reservar() {
                     <span className="mono">Pagamento</span>
                     <select
                       value={paymentMethod}
-                      onChange={(event) => setPaymentMethod(event.target.value as PaymentMethod)}
+                      onChange={(event) =>
+                        setPaymentMethod(
+                          event.target.value as Exclude<PaymentMethod, "admin_manual">,
+                        )
+                      }
                     >
                       {paymentMethods.map((method) => (
                         <option

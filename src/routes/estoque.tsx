@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode, type ComponentType } from "react";
 import { toast } from "sonner";
 import {
   Barcode,
@@ -235,14 +235,16 @@ function WmsShell({ actor }: { actor: Actor }) {
       typeof window !== "undefined" &&
       localStorage.getItem("arena-wms-guide-seen") !== "1",
   );
-  const tabs = [
-    ["dashboard", "Visão geral", ChartNoAxesCombined],
-    ["balcao", "Balcão / PDV", ShoppingCart],
-    ["catalogo", "Catálogo", Boxes],
-    ["estoque", "Inventário", PackagePlus],
-    ["auditoria", "Auditoria", ClipboardList],
-    ["usuarios", "Usuários", ShieldCheck],
-  ].filter(([id]) => actor.permissions.includes(id as WmsTab));
+  const tabs: Array<{ id: WmsTab; label: string; Icon: ComponentType<{ className?: string }> }> = (
+    [
+      { id: "dashboard", label: "Visão geral", Icon: ChartNoAxesCombined },
+      { id: "balcao", label: "Balcão / PDV", Icon: ShoppingCart },
+      { id: "catalogo", label: "Catálogo", Icon: Boxes },
+      { id: "estoque", label: "Inventário", Icon: PackagePlus },
+      { id: "auditoria", label: "Auditoria", Icon: ClipboardList },
+      { id: "usuarios", label: "Usuários", Icon: ShieldCheck },
+    ] satisfies Array<{ id: WmsTab; label: string; Icon: ComponentType<{ className?: string }> }>
+  ).filter(({ id }) => actor.permissions.includes(id));
   useEffect(() => {
     const requests: Promise<unknown>[] = [];
     if (
@@ -316,12 +318,12 @@ function WmsShell({ actor }: { actor: Actor }) {
           aria-label="Seções do Estoque e PDV"
           className="mx-auto flex max-w-[1500px] gap-1 overflow-x-auto px-4 pb-2 lg:px-8"
         >
-          {tabs.map(([id, label, Icon]) => (
+          {tabs.map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"
               aria-pressed={tab === id}
-              onClick={() => setTab(id as string)}
+              onClick={() => setTab(id)}
               className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wide ${tab === id ? "bg-primary text-primary-foreground" : "text-white/55 hover:bg-white/5 hover:text-white"}`}
             >
               <Icon className="h-4 w-4" />
@@ -473,11 +475,15 @@ function Dashboard({ actor }: { actor: Actor }) {
   if (q.isLoading) return <Loading />;
   if (q.error && !d) return <DataError onRetry={() => void q.refetch()} />;
   if (!d) return <Loading />;
-  const cards = [
-    ["Produtos ativos", d.products, Boxes],
-    ["Abaixo do mínimo", d.lowStock, PackagePlus],
-    ["Vendas hoje", d.salesToday, Receipt],
-    ["Faturamento hoje", money(d.revenueTodayCents), WalletCards],
+  const cards: Array<{
+    label: string;
+    value: string | number;
+    Icon: ComponentType<{ className?: string }>;
+  }> = [
+    { label: "Produtos ativos", value: d.products, Icon: Boxes },
+    { label: "Abaixo do mínimo", value: d.lowStock, Icon: PackagePlus },
+    { label: "Vendas hoje", value: d.salesToday, Icon: Receipt },
+    { label: "Faturamento hoje", value: money(d.revenueTodayCents), Icon: WalletCards },
   ];
   return (
     <section>
@@ -487,16 +493,13 @@ function Dashboard({ actor }: { actor: Actor }) {
         copy="Acompanhe a operação da lojinha de qualquer lugar."
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(([label, value, Icon]) => (
-          <article
-            key={label as string}
-            className="rounded-2xl border border-white/10 bg-[#211a23] p-5"
-          >
+        {cards.map(({ label, value, Icon }) => (
+          <article key={label} className="rounded-2xl border border-white/10 bg-[#211a23] p-5">
             <Icon className="h-5 w-5 text-primary" />
             <p className="mt-7 text-xs font-semibold uppercase tracking-wide text-white/45">
-              {label as string}
+              {label}
             </p>
-            <p className="mt-1 font-display text-4xl font-extrabold">{value as string | number}</p>
+            <p className="mt-1 font-display text-4xl font-extrabold">{value}</p>
           </article>
         ))}
       </div>
@@ -552,11 +555,14 @@ function Counter() {
     paymentMethod: "pix" | "card" | "cash" | "pending",
     channel: "counter" | "comanda",
   ) {
-    if (!items.length) return toast.error("Bipe ou selecione um produto.");
+    if (!items.length) {
+      toast.error("Bipe ou selecione um produto.");
+      return;
+    }
     try {
       const r = await sale({
         data: {
-          items: items.map((p) => ({ productId: p.id, quantity: cart[p.id] })),
+          items: items.map((p) => ({ productId: p.id, quantity: cart[p.id] ?? 0 })),
           paymentMethod,
           channel,
         },
@@ -571,11 +577,17 @@ function Counter() {
     }
   }
   async function finishInfinitePay() {
-    if (!items.length) return toast.error("Bipe ou selecione um produto.");
-    if (total < 100) return toast.error("A cobrança online exige um total mínimo de R$ 1,00.");
+    if (!items.length) {
+      toast.error("Bipe ou selecione um produto.");
+      return;
+    }
+    if (total < 100) {
+      toast.error("A cobrança online exige um total mínimo de R$ 1,00.");
+      return;
+    }
     try {
       const result = await createCheckout({
-        data: { items: items.map((p) => ({ productId: p.id, quantity: cart[p.id] })) },
+        data: { items: items.map((p) => ({ productId: p.id, quantity: cart[p.id] ?? 0 })) },
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -1041,8 +1053,10 @@ function Inventory() {
   const [reason, setReason] = useState("Compra de mercadoria");
   const products = (productsQ.data ?? []) as Product[];
   async function submit(type: "purchase_entry" | "manual_adjustment" | "loss") {
-    if (!selected || reason.trim().length < 3 || qty === 0)
-      return toast.error("Escolha o produto, informe uma quantidade e o motivo.");
+    if (!selected || reason.trim().length < 3 || qty === 0) {
+      toast.error("Escolha o produto, informe uma quantidade e o motivo.");
+      return;
+    }
     try {
       await move({ data: { productId: selected, quantity: qty, movementType: type, reason } });
       toast.success("Movimentação registrada.");

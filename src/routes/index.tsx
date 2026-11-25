@@ -47,11 +47,11 @@ function HomePage() {
     try {
       const savedTheme = window.localStorage.getItem("arena-leste-theme");
       if (savedTheme === "dark" || savedTheme === "light") {
-        document.documentElement.dataset.theme = savedTheme;
+        document.documentElement.dataset["theme"] = savedTheme;
         setTheme(savedTheme);
       }
     } catch {
-      document.documentElement.dataset.theme = "light";
+      document.documentElement.dataset["theme"] = "light";
     }
 
     const intro = document.querySelector<HTMLElement>("#intro");
@@ -243,7 +243,7 @@ function HomePage() {
               title={`Modo ${theme === "light" ? "escuro" : "claro"}`}
               onClick={() => {
                 const nextTheme = theme === "light" ? "dark" : "light";
-                document.documentElement.dataset.theme = nextTheme;
+                document.documentElement.dataset["theme"] = nextTheme;
                 setTheme(nextTheme);
                 try {
                   window.localStorage.setItem("arena-leste-theme", nextTheme);

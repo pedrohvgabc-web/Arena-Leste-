@@ -16,6 +16,12 @@ import {
 import { toast } from "sonner";
 import { SITE } from "@/lib/site";
 import {
+  AdminAgendaGrid,
+  type AdminAgendaBooking,
+  type AdminAgendaSchedule,
+  type AdminAgendaSpace,
+} from "@/components/AdminAgendaGrid";
+import {
   adminArenaSettings,
   adminCreateManualBooking,
   adminCurrentBookings,
@@ -68,6 +74,7 @@ type BookingGroup = {
   name: string;
   phone: string;
   unitId: UnitId;
+  spaceId: string;
   spaceName: string;
   paymentLabel: string;
   isAdminManual: boolean;
@@ -131,16 +138,22 @@ function groupBookings(rows: BookingRow[]): BookingGroup[] {
                 ? "failed"
                 : first.payment_status;
       const isAdminManual = items.some((row) => row.is_admin_manual === true);
+      const hasInfinitePayPayment = items.some((row) => row.payment_provider === "infinitepay");
       const paymentNeedsReview =
         !isAdminManual &&
-        first.payment_provider === "infinitepay" &&
+        hasInfinitePayPayment &&
         items.some((row) => row.provider_payment_status === "paid") &&
-        status !== "paid";
+        items.some(
+          (row) =>
+            row.payment_status === "cancelled" ||
+            row.payment_status === "expired" ||
+            row.payment_status === "failed",
+        );
       const captureMethod =
         items.find((row) => row.provider_capture_method)?.provider_capture_method ?? null;
       const paymentLabel = isAdminManual
         ? "Reserva manual · sem pagamento"
-        : first.payment_provider === "infinitepay"
+        : hasInfinitePayPayment
           ? captureMethod === "pix"
             ? "Pix · InfinitePay"
             : captureMethod === "credit_card"
@@ -161,10 +174,9 @@ function groupBookings(rows: BookingRow[]): BookingGroup[] {
         })),
       );
       const expectedBalanceDueCents = Math.max(0, amountCents - chargeAmountCents);
-      const balanceDueCents =
-        first.payment_provider === "infinitepay"
-          ? Math.max(0, amountCents - receivedAmountCents)
-          : expectedBalanceDueCents;
+      const balanceDueCents = hasInfinitePayPayment
+        ? Math.max(0, amountCents - receivedAmountCents)
+        : expectedBalanceDueCents;
       return {
         id: first.id,
         code,
@@ -172,6 +184,7 @@ function groupBookings(rows: BookingRow[]): BookingGroup[] {
         name: first.customer_name,
         phone: first.phone,
         unitId: first.unit_id,
+        spaceId: first.space_id,
         spaceName: `Unidade ${unitNumber} · ${first.space_name}`,
         paymentLabel,
         isAdminManual,
@@ -265,10 +278,28 @@ export function CurrentBookingsAdmin({
     retry: false,
     refetchInterval: 30_000,
   });
+  const currentBookingsData = query.data as { bookings?: BookingRow[] } | undefined;
   const groups = useMemo(
-    () => groupBookings((query.data?.bookings ?? []) as BookingRow[]),
-    [query.data?.bookings],
+    () => groupBookings(currentBookingsData?.bookings ?? []),
+    [currentBookingsData?.bookings],
   );
+  const agendaData = query.data as
+    { spaces?: AdminAgendaSpace[]; schedules?: AdminAgendaSchedule[] } | undefined;
+  const agendaBookings: AdminAgendaBooking[] = groups.map((booking) => ({
+    id: booking.id,
+    date: booking.date,
+    name: booking.name,
+    status: booking.status,
+    paymentLabel: booking.paymentLabel,
+    amountCents: booking.amountCents,
+    receivedAmountCents: booking.receivedAmountCents,
+    balanceDueCents: booking.balanceDueCents,
+    paymentNeedsReview: booking.paymentNeedsReview,
+    isAdminManual: booking.isAdminManual,
+    unitId: booking.unitId,
+    spaceId: booking.spaceId,
+    slots: booking.slots,
+  }));
   useEffect(() => {
     const dialog = cancelDialogRef.current;
     if (!dialog) return;
@@ -418,10 +449,12 @@ export function CurrentBookingsAdmin({
 
   return (
     <section
-      className="mt-8 overflow-hidden rounded-3xl border border-border bg-card/45"
+      className={`mt-2 overflow-hidden rounded-3xl border border-border bg-card/45 ${view === "agenda" ? "admin-agenda-page" : ""}`}
       aria-labelledby="current-bookings-heading"
     >
-      <div className="border-b border-border px-5 py-5 sm:px-7">
+      <div
+        className={`border-b border-border px-5 py-5 sm:px-7 ${view === "agenda" ? "admin-agenda-page-head" : ""}`}
+      >
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.15em] text-primary">
@@ -481,7 +514,7 @@ export function CurrentBookingsAdmin({
       </div>
       <div className="p-5 sm:p-7">
         {view === "agenda" && (
-          <p className="mb-4 text-sm font-semibold capitalize text-muted-foreground">{dateText}</p>
+          <p className="mb-2 text-xs font-semibold capitalize text-muted-foreground">{dateText}</p>
         )}
         {query.isLoading ? (
           <p className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
@@ -497,22 +530,32 @@ export function CurrentBookingsAdmin({
           </p>
         ) : (
           <>
-            <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {[
-                ["Reservas", String(groups.length)],
-                ["Checkouts pendentes/revisão", String(attentionRequired)],
-                ["Confirmadas", String(confirmed)],
-                ["Recebido · verificado", formatBRL(paidAmount)],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-border bg-background p-3 sm:p-4"
-                >
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="mt-1 font-display text-xl font-bold sm:text-2xl">{value}</p>
-                </div>
-              ))}
-            </div>
+            {view !== "agenda" && (
+              <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {[
+                  ["Reservas", String(groups.length)],
+                  ["Checkouts pendentes/revisão", String(attentionRequired)],
+                  ["Confirmadas", String(confirmed)],
+                  ["Recebido · verificado", formatBRL(paidAmount)],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-xl border border-border bg-background p-3 sm:p-4"
+                  >
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="mt-1 font-display text-xl font-bold sm:text-2xl">{value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {view === "agenda" && (
+              <AdminAgendaGrid
+                date={date}
+                bookings={agendaBookings}
+                spaces={agendaData?.spaces ?? []}
+                schedules={agendaData?.schedules ?? []}
+              />
+            )}
             {view === "reservations" && isMaster && (
               <section
                 className="mb-6 rounded-2xl border border-primary/35 bg-primary/5 p-4 sm:p-5"
@@ -743,9 +786,10 @@ export function CurrentBookingsAdmin({
                     : booking.paymentNeedsReview
                       ? "Pagamento recebido · revisar"
                       : booking.paymentLabel.includes("InfinitePay") &&
-                          booking.status === "paid" &&
-                          booking.balanceDueCents > 0
-                        ? `Falta pagar ${paymentProgress.remainingPercentage}%`
+                          booking.receivedAmountCents > 0
+                        ? booking.balanceDueCents > 0
+                          ? `Pago ${paymentProgress.receivedPercentage}% · falta ${paymentProgress.remainingPercentage}%`
+                          : "Pago 100% · verificado"
                         : STATUS_LABEL[booking.status];
                   const unitNumber = booking.unitId === "unidade-1" ? "1" : "2";
                   const message = `Olá, ${booking.name.split(" ")[0]}, sobre a sua reserva na Arena Leste ${unitNumber}, ${formatBookingWeekday(booking.date)}, dia ${booking.date.split("-").reverse().join("/")}, das ${formatSlotRanges(booking.slots)}.`;

@@ -137,10 +137,10 @@ function RootComponent() {
     try {
       const savedTheme = window.localStorage.getItem("arena-leste-theme");
       if (savedTheme === "dark" || savedTheme === "light") {
-        document.documentElement.dataset.theme = savedTheme;
+        document.documentElement.dataset["theme"] = savedTheme;
       }
     } catch {
-      document.documentElement.dataset.theme = "light";
+      document.documentElement.dataset["theme"] = "light";
     }
   }, []);
 

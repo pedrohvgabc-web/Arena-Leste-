@@ -1,7 +1,9 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, CalendarDays, Clock3, Loader2, Trophy } from "lucide-react";
+import { AdminAnalytics } from "@/components/AdminAnalytics";
 import { adminDashboardSummary } from "@/lib/arena.functions";
+import type { AdminDashboardDailyPoint, AdminDashboardStatusPoint } from "@/lib/admin-dashboard";
 import {
   ADMIN_MODULES,
   moduleCapabilitiesForRole,
@@ -17,6 +19,10 @@ type Summary = {
   activeCourts: number;
   totalCourts: number;
   tournamentPending: number;
+  analytics: {
+    weekly: AdminDashboardDailyPoint[];
+    todayStatuses: AdminDashboardStatusPoint[];
+  };
   upcoming: Array<{
     booking_date: string;
     start_time: string;
@@ -122,6 +128,11 @@ export function AdminOverview({ onNavigate, allowedModules, role }: AdminOvervie
               );
             })}
           </div>
+
+          <AdminAnalytics
+            weekly={data.analytics.weekly}
+            todayStatuses={data.analytics.todayStatuses}
+          />
 
           <div className="mt-7 grid gap-6 sm:mt-8 sm:gap-8 xl:grid-cols-[1.1fr_0.9fr]">
             <div>

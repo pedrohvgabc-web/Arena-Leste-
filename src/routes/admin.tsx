@@ -1,11 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronLeft,
   ChevronRight,
+  Menu,
+  Plus,
   LogOut,
   Copy,
   Check,
@@ -43,7 +45,7 @@ import {
   type AdminRole,
 } from "@/lib/admin-navigation";
 import { SITE } from "@/lib/site";
-import { wmsSaveUser, wmsUsers } from "@/lib/wms.functions";
+import { wmsSaveUser, wmsUsers, type WmsTab } from "@/lib/wms.functions";
 import {
   arenaNow,
   formatBRL,
@@ -206,17 +208,35 @@ function Dashboard({
   const [space, setSpace] = useState("all");
   const [status, setStatus] = useState("all");
   const [reveal, setReveal] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const mobileMenuDialogRef = useRef<HTMLDialogElement>(null);
   const allowedModules = modulesForRole(actor.role);
   const [activeModule, setActiveModule] = useState<AdminModuleId>(
-    allowedModules[0]?.id ?? "overview",
+    allowedModules.some((module) => module.id === "agenda")
+      ? "agenda"
+      : (allowedModules[0]?.id ?? "overview"),
   );
   const activeModuleId = allowedModules.some((module) => module.id === activeModule)
     ? activeModule
     : (allowedModules[0]?.id ?? "overview");
   const activeModuleInfo = allowedModules.find((module) => module.id === activeModuleId);
   const navigateToModule = (moduleId: AdminModuleId) => {
-    if (allowedModules.some((module) => module.id === moduleId)) setActiveModule(moduleId);
+    if (allowedModules.some((module) => module.id === moduleId)) {
+      setActiveModule(moduleId);
+      setMobileMenuOpen(false);
+    }
   };
+  const mobileQuickModules = allowedModules
+    .filter((module) =>
+      ["overview", "agenda", "reservations", "hours", "gallery", "tournament"].includes(module.id),
+    )
+    .slice(0, 3);
+  useEffect(() => {
+    const dialog = mobileMenuDialogRef.current;
+    if (!dialog) return;
+    if (mobileMenuOpen && !dialog.open) dialog.showModal();
+    if (!mobileMenuOpen && dialog.open) dialog.close();
+  }, [mobileMenuOpen]);
   const fetchDay = useServerFn(adminDay);
   const update = useServerFn(adminUpdateBooking);
   const logout = useServerFn(adminLogout);
@@ -292,7 +312,7 @@ function Dashboard({
   }, [day.error, qc]);
 
   return (
-    <div id="vAdm" className="adm">
+    <div id="vAdm" className="adm admin-workspace">
       <aside className="sb">
         <Link className="logo" to="/" aria-label="Voltar ao site da Arena Leste">
           <img
@@ -333,35 +353,19 @@ function Dashboard({
           })}
         </nav>
         <div className="admin-mobile-navigation">
-          <label htmlFor="admin-area-select">Ir para uma área</label>
-          <select
-            id="admin-area-select"
-            value={activeModuleId}
-            onChange={(event) => {
-              const selected = allowedModules.find((module) => module.id === event.target.value);
-              if (selected) navigateToModule(selected.id);
-            }}
-            aria-controls="admin-module-content"
+          <button
+            type="button"
+            className="admin-mobile-menu-button"
+            aria-haspopup="dialog"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="admin-mobile-menu"
+            onClick={() => setMobileMenuOpen(true)}
           >
-            {ADMIN_NAV_GROUPS.map((group) => {
-              const modules = allowedModules.filter((module) => module.group === group);
-              return modules.length ? (
-                <optgroup key={group} label={group}>
-                  {modules.map((module) => (
-                    <option key={module.id} value={module.id}>
-                      {module.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : null;
-            })}
-          </select>
-          <span>
-            {allowedModules.length}{" "}
-            {allowedModules.length === 1 ? "área disponível" : "áreas disponíveis"} no seu perfil
-          </span>
+            <Menu size={19} aria-hidden="true" />
+            <span>Menu</span>
+          </button>
         </div>
-        <Link className="btn" to="/">
+        <Link className="btn admin-site-link" to="/">
           ← Ver site
         </Link>
         <button
@@ -375,6 +379,70 @@ function Dashboard({
           <LogOut size={16} /> Sair do painel
         </button>
       </aside>
+      <dialog
+        ref={mobileMenuDialogRef}
+        id="admin-mobile-menu"
+        className="admin-mobile-dialog"
+        aria-labelledby="admin-mobile-menu-title"
+        onClose={() => setMobileMenuOpen(false)}
+      >
+        <div className="admin-mobile-drawer-panel">
+          <header className="admin-mobile-drawer-header">
+            <div>
+              <p className="admin-drawer-eyebrow">Arena Leste</p>
+              <h2 id="admin-mobile-menu-title">Áreas do painel</h2>
+              <p>
+                {actor.name} ·{" "}
+                {actor.role === "master"
+                  ? "Admin Master"
+                  : actor.role === "caixa"
+                    ? "Caixa"
+                    : "Mídia"}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="admin-drawer-close"
+              aria-label="Fechar menu"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <X size={20} />
+            </button>
+          </header>
+          <nav className="admin-drawer-navigation" aria-label="Todas as áreas autorizadas">
+            {ADMIN_NAV_GROUPS.map((group) => {
+              const modules = allowedModules.filter((module) => module.group === group);
+              if (!modules.length) return null;
+              return (
+                <div className="admin-nav-group" key={group}>
+                  <span className="admin-nav-group-label">{group}</span>
+                  {modules.map((module) => {
+                    const Icon = module.icon;
+                    return (
+                      <button
+                        key={module.id}
+                        type="button"
+                        className="sbi"
+                        aria-current={activeModuleId === module.id ? "page" : undefined}
+                        aria-controls="admin-module-content"
+                        onClick={() => navigateToModule(module.id)}
+                      >
+                        <i aria-hidden="true">
+                          <Icon size={18} />
+                        </i>
+                        <span>{module.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </nav>
+          <Link className="admin-drawer-site-link" to="/" onClick={() => setMobileMenuOpen(false)}>
+            ← Voltar ao site público
+          </Link>
+        </div>
+      </dialog>
       <main id="conteudo" className="am">
         <div className="admin-topbar flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -390,7 +458,7 @@ function Dashboard({
         </div>
         {actor.role === "master" && <MasterPushNotifications adminId={actor.id} />}
         <div id="admin-module-content" className="swap">
-          {activeModuleInfo && activeModuleId !== "overview" && (
+          {activeModuleInfo && activeModuleId !== "overview" && activeModuleId !== "agenda" && (
             <section
               className="admin-module-guide"
               aria-label={`Orientação: ${activeModuleInfo.label}`}
@@ -724,6 +792,46 @@ function Dashboard({
           )}
         </div>
       </main>
+      <nav className="admin-mobile-dock" aria-label="Atalhos principais do painel">
+        <button
+          type="button"
+          className="admin-dock-item"
+          aria-haspopup="dialog"
+          onClick={() => setMobileMenuOpen(true)}
+        >
+          <Menu size={19} aria-hidden="true" />
+          <span>Menu</span>
+        </button>
+        {mobileQuickModules.map((module) => {
+          const Icon = module.icon;
+          return (
+            <button
+              key={module.id}
+              type="button"
+              className="admin-dock-item"
+              aria-current={activeModuleId === module.id ? "page" : undefined}
+              onClick={() => navigateToModule(module.id)}
+            >
+              <Icon size={19} aria-hidden="true" />
+              <span>{module.id === "overview" ? "Visão" : module.label}</span>
+            </button>
+          );
+        })}
+        {actor.role === "master" && (
+          <button
+            type="button"
+            className="admin-dock-item is-create"
+            aria-label="Nova reserva manual"
+            onClick={() => {
+              navigateToModule("reservations");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+          >
+            <Plus size={21} aria-hidden="true" />
+            <span>Nova</span>
+          </button>
+        )}
+      </nav>
     </div>
   );
 }
@@ -973,6 +1081,7 @@ type WmsUserRecord = {
   display_name: string;
   role: "admin_remote" | "caixa_local";
   active: boolean;
+  tab_permissions: WmsTab[];
 };
 type WmsUserDraft = {
   id?: string;
@@ -981,7 +1090,7 @@ type WmsUserDraft = {
   password: string;
   role: WmsUserRecord["role"];
   active: boolean;
-  permissions: string[];
+  permissions: WmsTab[];
 };
 
 function AdminUsers() {
@@ -1272,14 +1381,16 @@ function AdminUsers() {
             <fieldset className="sm:col-span-2">
               <legend className="text-sm font-semibold">Abas liberadas no WMS / PDV</legend>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                {[
-                  ["dashboard", "Visão geral"],
-                  ["balcao", "Balcão / PDV"],
-                  ["catalogo", "Catálogo"],
-                  ["estoque", "Inventário"],
-                  ["auditoria", "Auditoria"],
-                  ["usuarios", "Usuários"],
-                ].map(([key, label]) => (
+                {(
+                  [
+                    ["dashboard", "Visão geral"],
+                    ["balcao", "Balcão / PDV"],
+                    ["catalogo", "Catálogo"],
+                    ["estoque", "Inventário"],
+                    ["auditoria", "Auditoria"],
+                    ["usuarios", "Usuários"],
+                  ] as const
+                ).map(([key, label]) => (
                   <label
                     key={key}
                     className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
@@ -1362,6 +1473,7 @@ function AdminUsers() {
                           password: "",
                           role: user.role,
                           active: user.active,
+                          permissions: user.tab_permissions,
                         })
                       }
                     >
@@ -1411,6 +1523,7 @@ function AdminUsers() {
                         password: "",
                         role: user.role,
                         active: user.active,
+                        permissions: user.tab_permissions,
                       })
                     }
                   >

@@ -24,6 +24,7 @@ import { normalizeValidCpf } from "./customer-data";
 import { tournamentRegistrationSchema } from "./tournament-schema";
 import { TOURNAMENT } from "./site";
 import { paymentCheckoutErrorMessage } from "./payment-errors";
+import { buildAdminDashboardAnalytics } from "./admin-dashboard";
 import type { ReservationPushDetails } from "./push-notification-content";
 
 type SpaceRow = {
@@ -1534,7 +1535,13 @@ const weeklyHoursSchema = z
       .max(2),
   })
   .superRefine((schedule, ctx) => {
-    const error = validateOpeningWindows(schedule.windows);
+    const error = validateOpeningWindows(
+      schedule.windows.map(({ start, end, slotMinutes }) => ({
+        start,
+        end,
+        ...(slotMinutes === undefined ? {} : { slotMinutes }),
+      })),
+    );
     if (error) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -1702,16 +1709,20 @@ export const adminDay = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     await requireAdmin();
     const db = await database();
-    // Expira Pix pendentes vencidos.
-    await db`
-      UPDATE public.bookings SET payment_status = 'expired', updated_at = now()
-      WHERE payment_status = 'pending' AND payment_method = 'pix' AND expires_at < now()
-    `;
     const [bookingRows, spaceRows] = await Promise.all([
       db`
         SELECT b.id, b.booking_code, b.group_code, b.booking_date::text AS booking_date,
         to_char(b.start_time, 'HH24:MI:SS') AS start_time, to_char(b.end_time, 'HH24:MI:SS') AS end_time,
-        b.customer_name, b.phone, b.payment_method, b.payment_status,
+        b.customer_name, b.phone, b.payment_method,
+        CASE WHEN b.payment_status = 'pending' AND b.payment_method = 'pix'
+          AND b.expires_at < now() AND NOT EXISTS (
+            SELECT 1 FROM public.bookings grouped_booking
+            INNER JOIN public.payments verified_payment ON verified_payment.booking_id = grouped_booking.id
+            WHERE COALESCE(grouped_booking.group_code, grouped_booking.booking_code)
+              = COALESCE(b.group_code, b.booking_code)
+              AND verified_payment.provider = 'infinitepay' AND verified_payment.status = 'paid'
+          )
+          THEN 'expired' ELSE b.payment_status END AS payment_status,
         p.provider AS payment_provider, p.status AS provider_payment_status,
         p.capture_method AS provider_capture_method, p.amount_cents AS provider_amount_cents,
         b.amount_cents, b.notes,
@@ -1736,29 +1747,72 @@ export const adminCurrentDay = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     await requireAdminRole(["master", "caixa", "midia"]);
     const db = await database();
-    await db`
-      UPDATE public.bookings SET payment_status = 'expired', updated_at = now()
-      WHERE payment_status = 'pending' AND payment_method = 'pix' AND expires_at < now()
-    `;
-    const rows = (await db`
-      SELECT b.id, b.booking_code, b.group_code, b.booking_date::text AS booking_date,
-        to_char(b.start_time, 'HH24:MI:SS') AS start_time,
-        to_char(b.end_time, 'HH24:MI:SS') AS end_time,
-        b.customer_name, b.phone, b.payment_method, b.payment_status, b.is_admin_manual,
-        p.provider AS payment_provider, p.status AS provider_payment_status,
-        p.capture_method AS provider_capture_method, p.amount_cents AS provider_amount_cents,
-        b.amount_cents,
-        b.notes, b.space_id, b.created_at::text AS created_at,
-        s.name AS space_name, s.unit_id,
-        ((b.booking_date + b.start_time) AT TIME ZONE 'America/Porto_Velho'
-          <= now() + interval '24 hours') AS cancellation_deadline_passed
-      FROM public.bookings b
-      INNER JOIN public.arena_spaces s ON s.id = b.space_id
-      LEFT JOIN public.payments p ON p.booking_id = b.id
-      WHERE b.booking_date = ${data.date}::date AND s.unit_id IN ('unidade-1', 'unidade-2')
-      ORDER BY b.start_time
-    `) as unknown as Array<BookingAdminRow & { space_name: string; unit_id: string }>;
-    return { bookings: rows };
+    const [rows, spaceRows, scheduleRows] = await Promise.all([
+      db`
+        SELECT b.id, b.booking_code, b.group_code, b.booking_date::text AS booking_date,
+          to_char(b.start_time, 'HH24:MI:SS') AS start_time,
+          to_char(b.end_time, 'HH24:MI:SS') AS end_time,
+          b.customer_name, b.phone, b.payment_method,
+          CASE WHEN b.payment_status = 'pending' AND b.payment_method = 'pix'
+            AND b.expires_at < now() AND NOT EXISTS (
+              SELECT 1 FROM public.bookings grouped_booking
+              INNER JOIN public.payments verified_payment ON verified_payment.booking_id = grouped_booking.id
+              WHERE COALESCE(grouped_booking.group_code, grouped_booking.booking_code)
+                = COALESCE(b.group_code, b.booking_code)
+                AND verified_payment.provider = 'infinitepay' AND verified_payment.status = 'paid'
+            )
+            THEN 'expired' ELSE b.payment_status END AS payment_status,
+          b.is_admin_manual,
+          p.provider AS payment_provider, p.status AS provider_payment_status,
+          p.capture_method AS provider_capture_method, p.amount_cents AS provider_amount_cents,
+          b.amount_cents,
+          b.notes, b.space_id, b.created_at::text AS created_at,
+          s.name AS space_name, s.unit_id,
+          ((b.booking_date + b.start_time) AT TIME ZONE 'America/Porto_Velho'
+            <= now() + interval '24 hours') AS cancellation_deadline_passed
+        FROM public.bookings b
+        INNER JOIN public.arena_spaces s ON s.id = b.space_id
+        LEFT JOIN public.payments p ON p.booking_id = b.id
+        WHERE b.booking_date = ${data.date}::date AND s.unit_id IN ('unidade-1', 'unidade-2')
+        ORDER BY b.start_time
+      `,
+      db`
+        SELECT id, name, unit_id, active, slot_minutes, sort_order
+        FROM public.arena_spaces
+        WHERE unit_id IN ('unidade-1', 'unidade-2')
+        ORDER BY unit_id, sort_order, name
+      `,
+      db`
+        SELECT units.unit_id,
+          CASE WHEN overrides.booking_date IS NOT NULL THEN overrides.windows
+            ELSE COALESCE(weekly.windows, '[]'::jsonb) END AS windows,
+          overrides.label AS override_label,
+          (overrides.booking_date IS NOT NULL) AS has_override
+        FROM unnest(ARRAY['unidade-1', 'unidade-2']::text[]) AS units(unit_id)
+        LEFT JOIN public.arena_weekly_hours AS weekly
+          ON weekly.unit_id = units.unit_id AND weekly.weekday = ${weekdayOf(data.date)}
+        LEFT JOIN public.arena_date_overrides AS overrides
+          ON overrides.unit_id = units.unit_id AND overrides.booking_date = ${data.date}::date
+        ORDER BY units.unit_id
+      `,
+    ]);
+    return {
+      bookings: rows as unknown as Array<BookingAdminRow & { space_name: string; unit_id: string }>,
+      spaces: spaceRows as unknown as Array<{
+        id: string;
+        name: string;
+        unit_id: "unidade-1" | "unidade-2";
+        active: boolean;
+        slot_minutes: number;
+        sort_order: number;
+      }>,
+      schedules: scheduleRows as unknown as Array<{
+        unit_id: "unidade-1" | "unidade-2";
+        windows: OpeningWindow[];
+        override_label: string | null;
+        has_override: boolean;
+      }>,
+    };
   });
 
 export const adminCurrentBookings = createServerFn({ method: "GET" })
@@ -1782,15 +1836,21 @@ export const adminCurrentBookings = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     await requireAdminRole(["master", "caixa", "midia"]);
     const db = await database();
-    await db`
-      UPDATE public.bookings SET payment_status = 'expired', updated_at = now()
-      WHERE payment_status = 'pending' AND payment_method = 'pix' AND expires_at < now()
-    `;
     const rows = (await db`
       SELECT b.id, b.booking_code, b.group_code, b.booking_date::text AS booking_date,
         to_char(b.start_time, 'HH24:MI:SS') AS start_time,
         to_char(b.end_time, 'HH24:MI:SS') AS end_time,
-        b.customer_name, b.phone, b.payment_method, b.payment_status, b.is_admin_manual,
+        b.customer_name, b.phone, b.payment_method,
+        CASE WHEN b.payment_status = 'pending' AND b.payment_method = 'pix'
+          AND b.expires_at < now() AND NOT EXISTS (
+            SELECT 1 FROM public.bookings grouped_booking
+            INNER JOIN public.payments verified_payment ON verified_payment.booking_id = grouped_booking.id
+            WHERE COALESCE(grouped_booking.group_code, grouped_booking.booking_code)
+              = COALESCE(b.group_code, b.booking_code)
+              AND verified_payment.provider = 'infinitepay' AND verified_payment.status = 'paid'
+          )
+          THEN 'expired' ELSE b.payment_status END AS payment_status,
+        b.is_admin_manual,
         p.provider AS payment_provider, p.status AS provider_payment_status,
         p.capture_method AS provider_capture_method, p.amount_cents AS provider_amount_cents,
         b.amount_cents,
@@ -1919,16 +1979,14 @@ export const adminCreateManualBooking = createServerFn({ method: "POST" })
 export const adminPending = createServerFn({ method: "GET" }).handler(async () => {
   await requireAdminRole(["master", "caixa"]);
   const db = await database();
-  await db`
-    UPDATE public.bookings SET payment_status = 'expired', updated_at = now()
-    WHERE payment_status = 'pending' AND payment_method = 'pix' AND expires_at < now()
-  `;
   const rows = (await db`
     SELECT b.id, b.booking_code, b.group_code, b.booking_date::text AS booking_date,
       to_char(b.start_time, 'HH24:MI:SS') AS start_time, b.customer_name,
       b.payment_method, b.amount_cents, b.space_id, s.name AS space_name
     FROM public.bookings b LEFT JOIN public.arena_spaces s ON s.id = b.space_id
-    WHERE b.payment_status = 'pending' AND b.booking_date >= ${arenaNow().date}::date
+    WHERE b.payment_status = 'pending'
+      AND (b.expires_at IS NULL OR b.expires_at > now())
+      AND b.booking_date >= ${arenaNow().date}::date
       AND s.unit_id IS NULL
     ORDER BY b.booking_date, b.start_time LIMIT 100
   `) as unknown as BookingPendingRow[];
@@ -2305,17 +2363,42 @@ export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(a
   await requireAdminRole(["master", "caixa"]);
   const db = await database();
   const date = arenaNow().date;
-  const [statsRows, courtRows, tournamentRows, nextRows] = await Promise.all([
+  const [statsRows, courtRows, tournamentRows, nextRows, reservationGroupRows] = await Promise.all([
     db`
       SELECT
         COUNT(DISTINCT COALESCE(b.group_code, b.booking_code)) FILTER (
           WHERE b.booking_date = ${date}::date
-            AND (b.payment_status = 'paid' OR (b.is_admin_manual = true AND b.payment_status = 'pending'))
+            AND (
+              b.payment_status = 'paid'
+              OR (b.is_admin_manual = true AND b.payment_status = 'pending')
+              OR (b.payment_status = 'pending' AND EXISTS (
+                SELECT 1 FROM public.payments p
+                WHERE p.booking_id = b.id AND p.provider = 'infinitepay' AND p.status = 'paid'
+              ))
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM public.bookings terminal_booking
+              WHERE COALESCE(terminal_booking.group_code, terminal_booking.booking_code)
+                = COALESCE(b.group_code, b.booking_code)
+                AND terminal_booking.payment_status IN ('cancelled', 'expired', 'failed')
+            )
         ) AS today_bookings,
         COUNT(DISTINCT COALESCE(b.group_code, b.booking_code)) FILTER (
           WHERE b.booking_date = ${date}::date AND b.payment_status = 'pending'
             AND b.is_admin_manual = false
-            AND (b.expires_at IS NULL OR b.expires_at > now())
+            AND (
+              b.expires_at IS NULL OR b.expires_at > now()
+              OR EXISTS (
+                SELECT 1 FROM public.payments p
+                WHERE p.booking_id = b.id AND p.provider = 'infinitepay' AND p.status = 'paid'
+              )
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM public.bookings terminal_booking
+              WHERE COALESCE(terminal_booking.group_code, terminal_booking.booking_code)
+                = COALESCE(b.group_code, b.booking_code)
+                AND terminal_booking.payment_status IN ('cancelled', 'expired', 'failed')
+            )
         ) AS today_pending
       FROM public.bookings b
       INNER JOIN public.arena_spaces s ON s.id = b.space_id
@@ -2344,15 +2427,71 @@ export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(a
         INNER JOIN public.arena_spaces s ON s.id = b.space_id
         WHERE s.unit_id IN ('unidade-1', 'unidade-2')
           AND b.booking_date >= ${date}::date
-          AND (b.payment_status = 'paid' OR (b.is_admin_manual = true AND b.payment_status = 'pending'))
+          AND (
+            b.payment_status = 'paid'
+            OR (b.is_admin_manual = true AND b.payment_status = 'pending')
+            OR (b.payment_status = 'pending' AND EXISTS (
+              SELECT 1 FROM public.payments p
+              WHERE p.booking_id = b.id AND p.provider = 'infinitepay' AND p.status = 'paid'
+            ))
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM public.bookings terminal_booking
+            WHERE COALESCE(terminal_booking.group_code, terminal_booking.booking_code)
+              = COALESCE(b.group_code, b.booking_code)
+              AND terminal_booking.payment_status IN ('cancelled', 'expired', 'failed')
+          )
         ORDER BY COALESCE(b.group_code, b.booking_code), b.booking_date, b.start_time
       ) upcoming
       ORDER BY booking_date, start_time
       LIMIT 5
     `,
+    db`
+      SELECT b.booking_date::text AS booking_date,
+        BOOL_AND(b.payment_status = 'paid') AS all_paid,
+        BOOL_OR(b.is_admin_manual = true AND b.payment_status = 'pending') AS manual,
+        BOOL_OR(b.payment_status = 'pending' AND b.is_admin_manual = false
+          AND (b.expires_at IS NULL OR b.expires_at > now())) AS active_pending,
+        BOOL_OR(p.provider = 'infinitepay' AND p.status = 'paid') AS provider_paid,
+        BOOL_OR(b.payment_status = 'cancelled') AS cancelled,
+        BOOL_OR(b.payment_status = 'expired') AS expired,
+        BOOL_OR(b.payment_status = 'pending' AND b.payment_method = 'pix'
+          AND b.expires_at < now()) AS expired_pending,
+        BOOL_OR(b.payment_status = 'failed') AS failed
+      FROM public.bookings b
+      INNER JOIN public.arena_spaces s ON s.id = b.space_id
+      LEFT JOIN public.payments p ON p.booking_id = b.id
+      WHERE s.unit_id IN ('unidade-1', 'unidade-2')
+        AND b.booking_date BETWEEN (${date}::date - 6) AND ${date}::date
+      GROUP BY b.booking_date, COALESCE(b.group_code, b.booking_code)
+      ORDER BY b.booking_date
+    `,
   ]);
   const stats = statsRows[0] as
     { today_bookings: number | string; today_pending: number | string } | undefined;
+  const analyticsGroups = (
+    reservationGroupRows as unknown as Array<{
+      booking_date: string;
+      all_paid: boolean;
+      manual: boolean;
+      active_pending: boolean;
+      provider_paid: boolean | null;
+      cancelled: boolean | null;
+      expired: boolean | null;
+      expired_pending: boolean | null;
+      failed: boolean | null;
+    }>
+  ).map((row) => ({
+    date: row.booking_date,
+    allPaid: row.all_paid,
+    manual: row.manual,
+    activePending: row.active_pending,
+    providerPaid: Boolean(row.provider_paid),
+    cancelled: Boolean(row.cancelled),
+    expired: Boolean(row.expired),
+    expiredPending: Boolean(row.expired_pending),
+    failed: Boolean(row.failed),
+  }));
   return {
     date,
     todayBookings: Number(stats?.today_bookings ?? 0),
@@ -2366,6 +2505,7 @@ export const adminDashboardSummary = createServerFn({ method: "GET" }).handler(a
     tournamentPending: Number(
       (tournamentRows[0] as { count: number | string } | undefined)?.count ?? 0,
     ),
+    analytics: buildAdminDashboardAnalytics(date, analyticsGroups),
     upcoming: nextRows as unknown as Array<{
       booking_date: string;
       start_time: string;

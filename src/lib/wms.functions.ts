@@ -208,16 +208,43 @@ export const wmsDashboard = createServerFn({ method: "GET" }).handler(async () =
       (SELECT coalesce(json_agg(movement), '[]'::json) FROM (SELECT m.id::text, p.name, m.movement_type, m.quantity, m.new_quantity, m.performed_by, m.created_at::text FROM public.wms_stock_movements m JOIN public.wms_products p ON p.id = m.product_id ORDER BY m.created_at DESC LIMIT 8) movement) AS recent_movements
   `) as unknown as Array<Record<string, unknown>>;
   const row = rows[0] ?? {};
-  const result: Record<string, unknown> = {
-    products: Number(row.products ?? 0),
-    lowStock: Number(row.low_stock ?? 0),
-    salesToday: Number(row.sales_today ?? 0),
-    revenueTodayCents: Number(row.revenue_today ?? 0),
+  const result: {
+    products: number;
+    lowStock: number;
+    salesToday: number;
+    revenueTodayCents: number;
+    grossProfitCents?: number;
+    cogsCents?: number;
+    recentMovements?: Array<{
+      id: string;
+      name: string;
+      movement_type: string;
+      quantity: number;
+      new_quantity: number;
+      performed_by: string;
+      created_at: string;
+    }>;
+  } = {
+    products: Number(row["products"] ?? 0),
+    lowStock: Number(row["low_stock"] ?? 0),
+    salesToday: Number(row["sales_today"] ?? 0),
+    revenueTodayCents: Number(row["revenue_today"] ?? 0),
   };
   if (actor.role === "admin_remote") {
-    result.grossProfitCents = Number(row.gross_profit ?? 0);
-    result.cogsCents = Number(row.cogs ?? 0);
-    result.recentMovements = row.recent_movements ?? [];
+    result["grossProfitCents"] = Number(row["gross_profit"] ?? 0);
+    result["cogsCents"] = Number(row["cogs"] ?? 0);
+    result["recentMovements"] =
+      (row["recent_movements"] as
+        | Array<{
+            id: string;
+            name: string;
+            movement_type: string;
+            quantity: number;
+            new_quantity: number;
+            performed_by: string;
+            created_at: string;
+          }>
+        | undefined) ?? [];
   }
   return { actor, ...result };
 });
@@ -225,25 +252,36 @@ export const wmsDashboard = createServerFn({ method: "GET" }).handler(async () =
 export const wmsProducts = createServerFn({ method: "GET" }).handler(async () => {
   const actor = await requireAnyTab(["balcao", "catalogo", "estoque"]);
   const rows =
-    (await getDb()`SELECT p.id::text, p.name, p.sku, p.barcode, p.unit, p.sale_price_cents::int, p.cost_price_cents::int, p.stock_quantity::int, p.minimum_stock::int, p.reorder_point::int, p.is_rental, p.active, coalesce(c.name,'Sem categoria') AS category FROM public.wms_products p LEFT JOIN public.wms_categories c ON c.id = p.category_id WHERE p.active = true ORDER BY lower(p.name), p.created_at DESC`) as unknown as Array<
-      Record<string, unknown>
-    >;
+    (await getDb()`SELECT p.id::text, p.name, p.sku, p.barcode, p.unit, p.sale_price_cents::int, p.cost_price_cents::int, p.stock_quantity::int, p.minimum_stock::int, p.reorder_point::int, p.is_rental, p.active, coalesce(c.name,'Sem categoria') AS category FROM public.wms_products p LEFT JOIN public.wms_categories c ON c.id = p.category_id WHERE p.active = true ORDER BY lower(p.name), p.created_at DESC`) as unknown as Array<{
+      id: string;
+      name: string;
+      sku: string;
+      barcode: string | null;
+      unit: string;
+      sale_price_cents: number;
+      stock_quantity: number;
+      minimum_stock: number;
+      reorder_point: number;
+      is_rental: boolean;
+      active: boolean;
+      category: string;
+    }>;
   return rows.map((row) =>
     actor.role === "admin_remote"
       ? row
       : {
-          id: row.id,
-          name: row.name,
-          sku: row.sku,
-          barcode: row.barcode,
-          unit: row.unit,
-          sale_price_cents: row.sale_price_cents,
-          stock_quantity: row.stock_quantity,
-          minimum_stock: row.minimum_stock,
-          reorder_point: row.reorder_point,
-          is_rental: row.is_rental,
-          active: row.active,
-          category: row.category,
+          id: row["id"],
+          name: row["name"],
+          sku: row["sku"],
+          barcode: row["barcode"],
+          unit: row["unit"],
+          sale_price_cents: row["sale_price_cents"],
+          stock_quantity: row["stock_quantity"],
+          minimum_stock: row["minimum_stock"],
+          reorder_point: row["reorder_point"],
+          is_rental: row["is_rental"],
+          active: row["active"],
+          category: row["category"],
         },
   );
 });
@@ -272,7 +310,8 @@ export const wmsSaveProduct = createServerFn({ method: "POST" })
       (await db`INSERT INTO public.wms_categories (name) VALUES (${data.category || "Sem categoria"}) ON CONFLICT (name) DO UPDATE SET name = excluded.name RETURNING id::text`) as unknown as Array<{
         id: string;
       }>;
-    if (!category[0]?.id) throw new Error("Não foi possível preparar a categoria do produto.");
+    const categoryId = category[0]?.id;
+    if (!categoryId) throw new Error("Não foi possível preparar a categoria do produto.");
     return db.begin(async (tx) => {
       let id = data.id;
       if (id) {
@@ -282,7 +321,7 @@ export const wmsSaveProduct = createServerFn({ method: "POST" })
             cost_price_cents: number;
           }>;
         if (!old[0]) throw new Error("Produto não encontrado.");
-        await tx`UPDATE public.wms_products SET name=${data.name}, sku=${data.sku}, barcode=${data.barcode || null}, category_id=${category[0].id}::uuid, unit=${data.unit}, sale_price_cents=${data.salePriceCents}, cost_price_cents=${data.costPriceCents}, stock_quantity=${data.stockQuantity}, minimum_stock=${data.minimumStock}, reorder_point=${data.reorderPoint}, is_rental=${data.isRental}, updated_at=now() WHERE id=${id}::uuid`;
+        await tx`UPDATE public.wms_products SET name=${data.name}, sku=${data.sku}, barcode=${data.barcode || null}, category_id=${categoryId}::uuid, unit=${data.unit}, sale_price_cents=${data.salePriceCents}, cost_price_cents=${data.costPriceCents}, stock_quantity=${data.stockQuantity}, minimum_stock=${data.minimumStock}, reorder_point=${data.reorderPoint}, is_rental=${data.isRental}, updated_at=now() WHERE id=${id}::uuid`;
         if (
           old[0].sale_price_cents !== data.salePriceCents ||
           old[0].cost_price_cents !== data.costPriceCents
@@ -290,16 +329,29 @@ export const wmsSaveProduct = createServerFn({ method: "POST" })
           await tx`INSERT INTO public.wms_price_history (product_id, previous_sale_price_cents, new_sale_price_cents, previous_cost_price_cents, new_cost_price_cents, reason, changed_by) VALUES (${id}::uuid, ${old[0].sale_price_cents}, ${data.salePriceCents}, ${old[0].cost_price_cents}, ${data.costPriceCents}, 'Atualização no painel', ${actor.name})`;
       } else {
         const inserted =
-          (await tx`INSERT INTO public.wms_products (name, sku, barcode, category_id, unit, sale_price_cents, cost_price_cents, stock_quantity, minimum_stock, reorder_point, is_rental) VALUES (${data.name},${data.sku},${data.barcode || null},${category[0].id}::uuid,${data.unit},${data.salePriceCents},${data.costPriceCents},${data.stockQuantity},${data.minimumStock},${data.reorderPoint},${data.isRental}) RETURNING id::text`) as unknown as Array<{
+          (await tx`INSERT INTO public.wms_products (name, sku, barcode, category_id, unit, sale_price_cents, cost_price_cents, stock_quantity, minimum_stock, reorder_point, is_rental) VALUES (${data.name},${data.sku},${data.barcode || null},${categoryId}::uuid,${data.unit},${data.salePriceCents},${data.costPriceCents},${data.stockQuantity},${data.minimumStock},${data.reorderPoint},${data.isRental}) RETURNING id::text`) as unknown as Array<{
             id: string;
           }>;
-        id = inserted[0].id;
+        const insertedId = inserted[0]?.id;
+        if (!insertedId) throw new Error("Não foi possível salvar o produto.");
+        id = insertedId;
       }
       await tx`INSERT INTO public.audit_logs (actor, action, entity, entity_id, details) VALUES (${actor.name}, 'wms.product.save', 'wms_product', ${id}, ${JSON.stringify({ role: actor.role, sku: data.sku })}::jsonb)`;
       const saved =
-        (await tx`SELECT id::text, name, sku, barcode, unit, sale_price_cents::int, cost_price_cents::int, stock_quantity::int, minimum_stock::int, reorder_point::int, is_rental, active, ${data.category || "Sem categoria"} AS category FROM public.wms_products WHERE id=${id}::uuid`) as unknown as Array<
-          Record<string, unknown>
-        >;
+        (await tx`SELECT id::text, name, sku, barcode, unit, sale_price_cents::int, cost_price_cents::int, stock_quantity::int, minimum_stock::int, reorder_point::int, is_rental, active, ${data.category || "Sem categoria"} AS category FROM public.wms_products WHERE id=${id}::uuid`) as unknown as Array<{
+          id: string;
+          name: string;
+          sku: string;
+          barcode: string | null;
+          unit: string;
+          sale_price_cents: number;
+          stock_quantity: number;
+          minimum_stock: number;
+          reorder_point: number;
+          is_rental: boolean;
+          active: boolean;
+          category: string;
+        }>;
       return { ok: true, id, product: saved[0] ?? null };
     });
   });
@@ -342,6 +394,8 @@ export const wmsCreateSale = createServerFn({ method: "POST" })
         (await tx`INSERT INTO public.wms_sales (operator_id, channel, payment_method, status) VALUES (${actor.id}, ${data.channel}, ${data.paymentMethod}, ${data.paymentMethod === "pending" ? "pending" : "completed"}) RETURNING id::text`) as unknown as Array<{
           id: string;
         }>;
+      const saleId = sale[0]?.id;
+      if (!saleId) throw new Error("Não foi possível iniciar a venda.");
       let total = 0;
       for (const item of data.items) {
         const rows =
@@ -357,13 +411,13 @@ export const wmsCreateSale = createServerFn({ method: "POST" })
         if (p.stock_quantity < item.quantity) throw new Error(`Estoque insuficiente: ${p.name}.`);
         const line = p.sale_price_cents * item.quantity;
         total += line;
-        await tx`INSERT INTO public.wms_sale_items (sale_id, product_id, quantity, unit_price_cents, unit_cost_snapshot_cents, total_cents) VALUES (${sale[0].id}::uuid, ${p.id}::uuid, ${item.quantity}, ${p.sale_price_cents}, ${p.cost_price_cents}, ${line})`;
+        await tx`INSERT INTO public.wms_sale_items (sale_id, product_id, quantity, unit_price_cents, unit_cost_snapshot_cents, total_cents) VALUES (${saleId}::uuid, ${p.id}::uuid, ${item.quantity}, ${p.sale_price_cents}, ${p.cost_price_cents}, ${line})`;
         await tx`UPDATE public.wms_products SET stock_quantity=stock_quantity-${item.quantity}, updated_at=now() WHERE id=${p.id}::uuid AND stock_quantity >= ${item.quantity}`;
-        await tx`INSERT INTO public.wms_stock_movements (product_id, movement_type, quantity, previous_quantity, new_quantity, reference_id, performed_by) VALUES (${p.id}::uuid, 'sale', ${-item.quantity}, ${p.stock_quantity}, ${p.stock_quantity - item.quantity}, ${sale[0].id}::uuid, ${actor.name})`;
+        await tx`INSERT INTO public.wms_stock_movements (product_id, movement_type, quantity, previous_quantity, new_quantity, reference_id, performed_by) VALUES (${p.id}::uuid, 'sale', ${-item.quantity}, ${p.stock_quantity}, ${p.stock_quantity - item.quantity}, ${saleId}::uuid, ${actor.name})`;
       }
-      await tx`UPDATE public.wms_sales SET total_cents=${total} WHERE id=${sale[0].id}::uuid`;
-      await tx`INSERT INTO public.audit_logs (actor, action, entity, entity_id, details) VALUES (${actor.name}, 'wms.sale.create', 'wms_sale', ${sale[0].id}, ${JSON.stringify({ role: actor.role, total })}::jsonb)`;
-      return { ok: true, saleId: sale[0].id, totalCents: total };
+      await tx`UPDATE public.wms_sales SET total_cents=${total} WHERE id=${saleId}::uuid`;
+      await tx`INSERT INTO public.audit_logs (actor, action, entity, entity_id, details) VALUES (${actor.name}, 'wms.sale.create', 'wms_sale', ${saleId}, ${JSON.stringify({ role: actor.role, total })}::jsonb)`;
+      return { ok: true, saleId, totalCents: total };
     });
   });
 
@@ -383,6 +437,8 @@ export const wmsCreateCheckout = createServerFn({ method: "POST" })
         (await tx`INSERT INTO public.wms_sales (operator_id, channel, payment_method, status) VALUES (${actor.id}, 'counter', 'infinitepay', 'pending') RETURNING id::text`) as unknown as Array<{
           id: string;
         }>;
+      const checkoutSaleId = inserted[0]?.id;
+      if (!checkoutSaleId) throw new Error("Não foi possível iniciar a cobrança.");
       let total = 0;
       for (const item of data.items) {
         const rows =
@@ -399,12 +455,12 @@ export const wmsCreateCheckout = createServerFn({ method: "POST" })
           throw new Error(`Estoque insuficiente: ${product.name}.`);
         const line = Number(product.sale_price_cents) * item.quantity;
         total += line;
-        await tx`INSERT INTO public.wms_sale_items (sale_id, product_id, quantity, unit_price_cents, unit_cost_snapshot_cents, total_cents) VALUES (${inserted[0].id}::uuid, ${product.id}::uuid, ${item.quantity}, ${product.sale_price_cents}, ${product.cost_price_cents}, ${line})`;
+        await tx`INSERT INTO public.wms_sale_items (sale_id, product_id, quantity, unit_price_cents, unit_cost_snapshot_cents, total_cents) VALUES (${checkoutSaleId}::uuid, ${product.id}::uuid, ${item.quantity}, ${product.sale_price_cents}, ${product.cost_price_cents}, ${line})`;
       }
-      const orderNsu = `ALW-${inserted[0].id}`;
-      await tx`UPDATE public.wms_sales SET total_cents=${total}, payment_provider='infinitepay', payment_order_nsu=${orderNsu} WHERE id=${inserted[0].id}::uuid`;
-      await audit(actor, "wms.checkout.create", "wms_sale", inserted[0].id, { total, orderNsu });
-      return { id: inserted[0].id, orderNsu, total };
+      const orderNsu = `ALW-${checkoutSaleId}`;
+      await tx`UPDATE public.wms_sales SET total_cents=${total}, payment_provider='infinitepay', payment_order_nsu=${orderNsu} WHERE id=${checkoutSaleId}::uuid`;
+      await audit(actor, "wms.checkout.create", "wms_sale", checkoutSaleId, { total, orderNsu });
+      return { id: checkoutSaleId, orderNsu, total };
     });
     try {
       const checkout = await createInfinitePayCheckout({
@@ -474,13 +530,13 @@ export const wmsAudit = createServerFn({ method: "GET" }).handler(async () => {
       Record<string, unknown>
     >;
   return rows.map((row) => ({
-    id: String(row.id),
-    actor: String(row.actor),
-    action: String(row.action),
-    entity: String(row.entity),
-    entity_id: row.entity_id == null ? null : String(row.entity_id),
-    details: row.details ?? {},
-    created_at: String(row.created_at),
+    id: String(row["id"]),
+    actor: String(row["actor"]),
+    action: String(row["action"]),
+    entity: String(row["entity"]),
+    entity_id: row["entity_id"] == null ? null : String(row["entity_id"]),
+    details: row["details"] ?? {},
+    created_at: String(row["created_at"]),
   }));
 });
 
@@ -501,11 +557,13 @@ export const wmsCreateUser = createServerFn({ method: "POST" })
       (await db`INSERT INTO public.wms_users (username, display_name, password_hash, role) VALUES (${data.username}, ${data.displayName}, ${await sha256(data.password)}, ${data.role}) RETURNING id::text`) as unknown as Array<{
         id: string;
       }>;
-    await audit(actor, "wms.user.create", "wms_user", rows[0].id, {
+    const userId = rows[0]?.id;
+    if (!userId) throw new Error("Não foi possível criar o usuário.");
+    await audit(actor, "wms.user.create", "wms_user", userId, {
       username: data.username,
       role: data.role,
     });
-    return { ok: true, id: rows[0].id };
+    return { ok: true, id: userId };
   });
 
 const wmsUserInput = z.object({
@@ -528,15 +586,15 @@ export const wmsUsers = createServerFn({ method: "GET" }).handler(async () => {
       Record<string, unknown>
     >;
   return rows.map((row) => {
-    const role = row.role as Role;
+    const role = row["role"] as Role;
     return {
-      id: String(row.id),
-      username: String(row.username),
-      display_name: String(row.display_name),
+      id: String(row["id"]),
+      username: String(row["username"]),
+      display_name: String(row["display_name"]),
       role,
-      active: Boolean(row.active),
-      tab_permissions: normalizeTabs(row.tab_permissions, role),
-      created_at: String(row.created_at),
+      active: Boolean(row["active"]),
+      tab_permissions: normalizeTabs(row["tab_permissions"], role),
+      created_at: String(row["created_at"]),
     };
   });
 });

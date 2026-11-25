@@ -95,14 +95,12 @@
 
 - [x] **Exigir nome e sobrenome do responsável** — não permitir concluir uma reserva com apenas um nome; mostrar orientação clara no formulário e validar novamente no servidor para proteger chamadas diretas à API.
 
-
 ## Galeria pública 3D e banco de fotos
 
 - [ ] **Exibir a esteira 3D na área escura da landing page** — após a faixa/campanha e antes das unidades, mostrar as fotos da Arena em um carrossel de aparência 3D, inspirado no HTML e no vídeo anexados. Ao rolar, a esteira passa continuamente em perspectiva; os cartões aumentam ao chegar de frente e a sequência termina com uma foto em destaque frontal. Só então a rolagem natural segue para as outras seções do site. Não capturar a rolagem do usuário nem deixar um loop infinito impedir a navegação.
 - [ ] **Adaptar o efeito para celular e acessibilidade** — usar o mesmo layout em tela pequena com cartões e percurso 3D ajustados ao viewport; respeitar movimento reduzido com galeria estática, conteúdo acessível por teclado/leitor de tela e nenhum recurso essencial dependente da animação. Se houver menos de quatro fotos publicadas, não simular uma galeria cheia; explicar no painel que a esteira é ativada depois que houver fotos suficientes.
 - [ ] **Gerenciar a biblioteca de fotos no admin** — incluir um módulo autenticado para enviar, editar título e texto alternativo, ordenar, publicar/ocultar e excluir fotos com confirmação. O usuário pediu que o administrador possa “tirar fotos, fazer upload de fotos e tudo mais” diretamente pelo painel.
 - [ ] **Persistir e entregar imagens com segurança e leveza** — otimizar os uploads no navegador para WebP de até 1.600 px e 600 KiB, validar novamente MIME/conteúdo/tamanho e autenticação no servidor, guardar metadados e bytes no Neon, limitar a biblioteca a 50 imagens e a esteira pública a 12 publicadas, servir somente imagens públicas autorizadas com cabeçalhos seguros/cache e registrar as alterações administrativas em auditoria. Não expor dados pessoais nem acrescentar serviço/segredo externo sem configuração.
-
 
 ## Fase final — Contas, perfis e auditoria
 
@@ -113,7 +111,6 @@
 - [ ] Criar a aba Master de gerenciamento de usuários para alterar nomes de login, nomes de exibição, senhas e status das contas.
 - [ ] Registrar no log toda escrita administrativa e impedir acesso direto por endpoint quando o perfil não tiver permissão.
 - [ ] Depois da conclusão dos acessos, otimizar Visão geral e Auditoria com carregamento sob demanda, agregações e paginação.
-
 
 ## Solicitação atual — mobile da landing, reserva e notificações master
 
@@ -158,3 +155,10 @@
 - A navegação e os textos foram revisados por leitura de código; a matriz Master/Caixa/Mídia é testada sem alteração, o seletor e a navegação programática filtram destinos pelo perfil. A descrição de bloqueio manual aparece somente para Master.
 - Não houve screenshot/emulação de viewport móvel nem teste em aparelho físico nesta etapa; a experiência mobile foi verificada por código e CSS responsivo, não por validação visual no dispositivo.
 - Commit funcional `4a916870c17c5814268c4376288e3645728faea8` enviado a `origin/main`; Render confirmou frontend `arena-leste` e backend `arena-elsinho` como `live` nesse SHA. As rotas `/` e `/admin` responderam HTTP 200 no smoke test. Esta melhoria é apenas de interface e não altera código de backend.
+
+## Solicitação atual — redesign visual do Admin e agenda conforme referências Belasis
+
+- [ ] **Dashboard com gráficos de dados reais** — preservar os indicadores já existentes e desenhar cartões/gráficos que descrevam reservas por data de utilização, estados de reserva e/ou faixas horárias observadas. Identificar claramente período e legenda. Usar apenas contagens/estados presentes no banco; não inventar visitas, funil, ticket médio ou receita. Respostas agregadas não devem carregar nome ou telefone e devem manter a autorização de Admin da visão geral.
+- [ ] **Agenda diária em grade por quadra e horário** — apresentar as quadras da unidade em colunas, tempo no eixo vertical e reserva confirmada/bloqueio manual em blocos proporcionais ao intervalo real; permitir navegar entre data e unidade. Construir a escala com os horários semanais/exceções salvos e as reservas reais, sem esconder uma reserva existente fora da janela configurada. Checkout pendente precisa ficar identificado como não bloqueante e não pode parecer ocupação; cancelada, expirada ou falha não pode ser mostrada como ocupação ativa. Preservar consulta/lista, filtros e ações atuais.
+- [ ] **Adaptar agenda e shell a smartphones** — manter eixo de horários legível e estável durante rolagem horizontal das quadras; usar escala visual de 30 minutos e indicador da hora atual apenas para hoje; oferecer navegação de data, menu expansível e atalhos inferiores utilizáveis com toque. No desktop, usar navegação lateral, workspace neutro, cartões claros e gráficos sem prejudicar áreas administrativas já existentes.
+- [ ] **Respeitar autenticação, permissões e regras operacionais** — apresentar no menu e barra inferior somente destinos permitidos pela matriz Master/Caixa/Mídia; atalhos contextuais não podem ampliar acesso. Criação de reserva continua exclusivamente Master via formulário já existente; não alterar pagamentos, agenda pública, disponibilidade, banco/migrations ou permissões e não criar dados de teste. Agregações de gráficos/horários são somente leitura, sem PII desnecessária.

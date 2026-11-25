@@ -81,7 +81,6 @@ Integrar a nova versão enviada em `arena-leste-projeto.zip` ao site já operaci
 - `drizzle/migrations/0008_cancelled_slot_offers.sql`: armazenamento aditivo de ofertas; requer aplicação no Neon antes de ativar a função.
 - `src/styles.css`, `vite.config.ts` e `vite.static.config.ts`: tokens, estilos e builds atuais dos serviços Render.
 
-
 ## Extensão solicitada — galeria de fotos 3D
 
 - **Posição e aparência:** inserir uma seção escura de galeria entre a faixa do campeonato e as unidades, preservando o laranja `#DF4F07`, os títulos esportivos Barlow Condensed e o restante do visual já aprovado.
@@ -92,7 +91,6 @@ Integrar a nova versão enviada em `arena-leste-projeto.zip` ao site já operaci
 - **Administração:** acrescentar um módulo autenticado “Galeria de fotos” para enviar imagens, editar título/descrição alternativa, ordenar, publicar/ocultar e excluir com confirmação. Aplicar o limite de 12 fotos publicadas também no servidor, proteger uploads por sessão/admin e registrar alterações no log de auditoria.
 - **Estrutura principal:** `src/components/PhotoConveyorGallery.tsx` apresenta a galeria pública; `src/components/PhotoGalleryAdmin.tsx` gerencia a biblioteca; `src/routes/api.gallery.$id.ts` serve os binários com MIME seguro; `src/lib/arena.functions.ts` fornece listagem e operações autenticadas; migration aditiva `0009_photo_gallery.sql` adiciona tabela e índices. Render/Neon e as rotas existentes permanecem intactas.
 
-
 ## Extensão solicitada — CTA, galeria paginada, perfis/auditoria e WMS
 
 - **CTA e galeria:** logo após a inscrição do Novembro Azul, inserir o texto exato “Clique no botão para achar sua foto<br>e postar nas redes sociais” e o botão “Ache aqui sua foto!”. Criar `/fotos` com busca, filtro por quadra, download, carregamento incremental e paginação por cursor, suportando 200+ fotos por evento.
@@ -102,7 +100,6 @@ Integrar a nova versão enviada em `arena-leste-projeto.zip` ao site já operaci
 - **WMS:** preparar superfície `/estoque` para o preview e arquitetura de serviço separado. Produto inclui SKU, custo, venda e estoque mínimo; Caixa vê somente preço de venda e saldo; Admin Master vê custo, margem, preço e histórico. Saídas usam transação e bloqueio de linha para nunca permitir saldo negativo em concorrência.
 - **Subdomínio:** `estoque.arena-leste.com.br` não será considerado publicado até haver configuração de DNS, serviço Render separado e uma estratégia de sessão realmente compartilhável entre origens do domínio pai. O preview usa a mesma autorização server-side sem fingir que o cookie atual funciona em outro domínio.
 - **Validação:** manter alterações no branch/preview; testar visual em desktop/mobile e tentar acessar auditoria, usuários e custo/margem com Caixa antes de qualquer deploy do código.
-
 
 ## Fase final — Perfis administrativos, auditoria e gestão de acessos
 
@@ -132,7 +129,6 @@ Integrar a nova versão enviada em `arena-leste-projeto.zip` ao site já operaci
 ### Depois desta fase
 
 Otimizar a renderização e consultas de Visão geral e Auditoria com carregamento sob demanda, consultas agregadas e paginação, conforme pedido do usuário.
-
 
 ## Extensão solicitada — mobile prioritário e avisos push de reservas
 
@@ -180,3 +176,14 @@ Otimizar a renderização e consultas de Visão geral e Auditoria com carregamen
 - **Escopo das áreas:** incluir Operação (Visão geral, Agenda, Reservas, Horários), Estrutura (Unidades e quadras), Conteúdo (Galeria, Torneio, Contato) e Administração (Dados e backup, Histórico legado, Alterações feitas, Gerenciar acessos). A descrição de Reservas contempla o bloqueio manual exclusivamente para Master e não presume pagamento.
 - **Estrutura existente:** manter `src/routes/admin.tsx` como shell de navegação e permissão; expandir `src/lib/admin-navigation.ts` como fonte única dos grupos, finalidade e instruções; melhorar `src/components/AdminOverview.tsx` para acesso por tarefa; estender `src/arena-zip-adapt.css` para seletor e orientação móveis. Componentes funcionais dos módulos permanecem donos de suas ações e validações.
 - **Limites técnicos:** não alterar APIs, schema/migrations, checkout, pagamentos ou regras de agenda. Nenhuma gravação de produção é necessária para esta melhoria de interface. Manter navegação desktop, papéis Master/Caixa/Mídia e acesso a todas as funções atualmente disponíveis.
+
+## Extensão — Admin visual inspirado nas referências desktop e mobile (24/11/2026)
+
+- **Direção de design:** evoluir a linguagem operacional da Arena Leste com referência aos dois vídeos do Belasis, sem copiar módulos de salão. Desktop combina navegação lateral laranja, cabeçalho claro, área de trabalho neutra e cartões com KPIs/gráficos; mobile usa menu expansível, navegação inferior contextual, cartões empilhados e agenda horizontalmente rolável. Hierarquia, dados e ações continuam próprios da Arena.
+- **Princípios:** leitura em um relance; visual consistente com carvão/laranja da marca; status semanticamente verdadeiro; densidade informacional graduada por largura da tela; acessibilidade de teclado, leitor de tela e toque; cada gráfico informa o que mede e o período observado.
+- **Dashboard:** preservar indicadores atuais autorizados e acrescentar gráficos somente de dados registrados. A série semanal descreve reservas por data de utilização; a distribuição de estados distingue pagamento verificado, bloqueio manual e checkout pendente, que não ocupa a quadra. Não mostrar visitantes, conversão de funil, ticket médio ou receita sem uma fonte atual confiável no banco. Agregações novas serão somente de leitura, sem nomes/telefones, com as mesmas verificações de papel da visão geral.
+- **Agenda desktop:** trocar a lista como representação visual principal por uma grade temporal: quadras como colunas, horário no eixo vertical e intervalos em blocos proporcionais à duração. Data e unidade são navegáveis; o horário de funcionamento vem das janelas semanais/exceções efetivamente cadastradas, e os blocos vêm das reservas existentes. Pagamentos confirmados e bloqueios manuais aparecem como ocupados; reservas de checkout pendente são explicitamente não bloqueantes e não devem parecer ocupar um horário. Estados cancelados/expirados/falhos continuam consultáveis na lista de reservas, mas não são renderizados como ocupação ativa.
+- **Agenda mobile:** conservar o eixo de horário visível durante a rolagem horizontal das quadras; usar passos de 30 minutos na visualização, indicador da hora atual quando a data for hoje, seletor/data com navegação e cartões/blocos legíveis. Em larguras muito estreitas, a pessoa pode rolar apenas o conteúdo da grade sem perder os horários. A lista existente e suas ações continuam disponíveis abaixo/na aba própria.
+- **Navegação responsiva:** manter menu desktop por grupos; no smartphone, abrir as mesmas áreas autorizadas em um drawer e oferecer barra inferior com atalhos e ações contextuais somente quando o papel permitir. Não alterar `modulesForRole`, `ADMIN_MODULE_ROLES`, acesso às funções do servidor nem tornar a criação manual acessível a Caixa/Mídia. O botão de criação apenas conduz ao formulário existente e não executa gravação direta.
+- **Arquitetura:** `src/routes/admin.tsx` permanece dona do shell, navegação e permissões; `src/components/AdminOverview.tsx` e um componente de gráficos administram a visão geral; `src/components/CurrentBookingsAdmin.tsx` permanece dona dos filtros/ações e recebe a grade via componente de agenda; `src/lib/arena.functions.ts` fornece agregações e metadados de horário com autenticação existente; `src/arena-zip-adapt.css` e `src/arena-zip.css` cuidam da responsividade e linguagem visual. Não é necessária migração nem mudança de dados operacionais.
+- **Restrições:** preservar autenticação, matriz Master/Caixa/Mídia, autorização server-side, reservas pagas, bloqueios manuais Master, preços, disponibilidade, checkout, auditoria e ações administrativas. Não gravar reservas de teste. Os vídeos são referência de composição e interação, não fonte de funcionalidades inexistentes na Arena.
