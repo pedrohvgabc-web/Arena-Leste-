@@ -209,6 +209,7 @@ function Dashboard({
   const [status, setStatus] = useState("all");
   const [reveal, setReveal] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
   const mobileMenuDialogRef = useRef<HTMLDialogElement>(null);
   const allowedModules = modulesForRole(actor.role);
   const [activeModule, setActiveModule] = useState<AdminModuleId>(
@@ -312,7 +313,10 @@ function Dashboard({
   }, [day.error, qc]);
 
   return (
-    <div id="vAdm" className="adm admin-workspace">
+    <div
+      id="vAdm"
+      className={`adm admin-workspace ${activeModuleId === "agenda" ? "agenda-active" : ""} ${actor.role === "master" ? "has-master-notifications" : ""}`}
+    >
       <aside className="sb">
         <Link className="logo" to="/" aria-label="Voltar ao site da Arena Leste">
           <img
@@ -322,6 +326,7 @@ function Dashboard({
             height="119"
           />
         </Link>
+        {actor.role === "master" && <MasterPushNotifications adminId={actor.id} />}
         <p className="mono">Painel administrativo</p>
         <nav id="sbn" aria-label="Módulos administrativos">
           {ADMIN_NAV_GROUPS.map((group) => {
@@ -456,7 +461,6 @@ function Dashboard({
             {actor.role === "master" ? "Admin Master" : actor.role === "caixa" ? "Caixa" : "Mídia"}
           </span>
         </div>
-        {actor.role === "master" && <MasterPushNotifications adminId={actor.id} />}
         <div id="admin-module-content" className="swap">
           {activeModuleInfo && activeModuleId !== "overview" && activeModuleId !== "agenda" && (
             <section
@@ -486,9 +490,21 @@ function Dashboard({
               onNavigate={navigateToModule}
             />
           )}
-          {activeModuleId === "agenda" && <CurrentBookingsAdmin view="agenda" />}
+          {activeModuleId === "agenda" && (
+            <CurrentBookingsAdmin
+              view="agenda"
+              isMaster={actor.role === "master"}
+              manualFormOpen={manualFormOpen}
+              onManualFormOpenChange={setManualFormOpen}
+            />
+          )}
           {activeModuleId === "reservations" && (
-            <CurrentBookingsAdmin view="reservations" isMaster={actor.role === "master"} />
+            <CurrentBookingsAdmin
+              view="reservations"
+              isMaster={actor.role === "master"}
+              manualFormOpen={manualFormOpen}
+              onManualFormOpenChange={setManualFormOpen}
+            />
           )}
           {activeModuleId === "courts" && (
             <ArenaSettingsAdmin initialTab="courts" showTabs={false} />
@@ -823,8 +839,8 @@ function Dashboard({
             className="admin-dock-item is-create"
             aria-label="Nova reserva manual"
             onClick={() => {
-              navigateToModule("reservations");
-              window.scrollTo({ top: 0, behavior: "smooth" });
+              navigateToModule("agenda");
+              setManualFormOpen(true);
             }}
           >
             <Plus size={21} aria-hidden="true" />

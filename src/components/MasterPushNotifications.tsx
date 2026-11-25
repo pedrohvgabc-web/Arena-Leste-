@@ -152,50 +152,18 @@ export function MasterPushNotifications({ adminId }: Props) {
     }
   }
 
+  const disabled =
+    busy || query.isLoading || query.isError || !settings?.configured || deviceActive === null;
   return (
-    <section
-      className="my-5 flex flex-col gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
-      aria-labelledby="master-push-heading"
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        <Bell className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-        <div className="min-w-0">
-          <h2 id="master-push-heading" className="font-display text-xl font-bold uppercase">
-            Avisos de novas reservas
-          </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Receba no dispositivo o nome, a data, a unidade e o intervalo de horas. A notificação
-            não exibe valor, telefone, CPF ou endereço. Ela pode aparecer na tela bloqueada.
-          </p>
-          {query.isError && (
-            <p className="mt-2 text-sm text-destructive" role="alert">
-              Não foi possível consultar a configuração. Atualize o painel e tente novamente.
-            </p>
-          )}
-          {!query.isLoading && settings && !settings.configured && (
-            <p className="mt-2 text-sm text-warning" role="status">
-              As chaves de Web Push ainda não estão configuradas no servidor.
-            </p>
-          )}
-          {!deviceActive && settings?.active && (
-            <p className="mt-2 text-sm text-muted-foreground" role="status">
-              Há notificações habilitadas em outro dispositivo desta conta.
-            </p>
-          )}
-          {message && (
-            <p className="mt-2 text-sm" role="status">
-              {message}
-            </p>
-          )}
-        </div>
-      </div>
+    <div className="admin-push-control">
       <button
         type="button"
         onClick={() => void (deviceActive ? deactivate() : activate())}
-        disabled={
-          busy || query.isLoading || query.isError || !settings?.configured || deviceActive === null
-        }
-        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-5 font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
+        aria-label={`${deviceActive ? "Desativar" : "Ativar"} notificações de novas reservas`}
+        aria-describedby="master-push-description"
+        title="Avisos de novas reservas: nome, data, unidade e horário; sem valores ou dados sensíveis"
+        className="admin-push-button"
       >
         {busy || query.isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -204,8 +172,20 @@ export function MasterPushNotifications({ adminId }: Props) {
         ) : (
           <Bell className="h-4 w-4" aria-hidden="true" />
         )}
-        {deviceActive ? "Desativar neste dispositivo" : "Ativar notificações"}
+        <span>{deviceActive ? "Avisos ativos" : "Ativar notificações"}</span>
       </button>
-    </section>
+      <span id="master-push-description" className="sr-only">
+        Receba notificações de novas reservas com nome, data, unidade e intervalo de horas. O valor
+        da reserva não é exibido.
+      </span>
+      {(message || query.isError || (!query.isLoading && settings && !settings.configured)) && (
+        <p className="admin-push-status" role="status">
+          {message ??
+            (query.isError
+              ? "Não foi possível consultar as notificações."
+              : "As chaves de Web Push ainda não foram configuradas no servidor.")}
+        </p>
+      )}
+    </div>
   );
 }

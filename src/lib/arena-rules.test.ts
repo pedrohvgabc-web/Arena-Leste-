@@ -184,7 +184,7 @@ describe("regras de funcionamento configuráveis", () => {
     expect(validateSlot("2026-02-30", "14:00", TUESDAY, 60, NOW).ok).toBe(false);
     expect(validateSlot("2026-10-27", "24:00", TUESDAY, 60, NOW).ok).toBe(false);
   });
-  it("valida reservas manuais entre 13:00 e 24:00 em incrementos de 15 minutos", () => {
+  it("valida reservas manuais entre 00:00 e 24:00 em incrementos de 15 minutos", () => {
     expect(isValidDateISO("2026-02-28")).toBe(true);
     expect(isValidDateISO("2026-02-30")).toBe(false);
     expect(validateAdminManualRange("13:00", "24:00")).toEqual({
@@ -195,8 +195,17 @@ describe("regras de funcionamento configuráveis", () => {
       ok: true,
       durationMinutes: 90,
     });
-    expect(validateAdminManualRange("12:45", "14:00").ok).toBe(false);
+    expect(validateAdminManualRange("00:00", "01:00")).toEqual({
+      ok: true,
+      durationMinutes: 60,
+    });
+    expect(validateAdminManualRange("23:45", "24:00")).toEqual({
+      ok: true,
+      durationMinutes: 15,
+    });
+    expect(validateAdminManualRange("24:00", "24:15").ok).toBe(false);
     expect(validateAdminManualRange("23:45", "24:15").ok).toBe(false);
+    expect(validateAdminManualRange("00:00", "00:00").ok).toBe(false);
     expect(validateAdminManualRange("14:00", "14:00").ok).toBe(false);
     expect(validateAdminManualRange("13:01", "14:00").ok).toBe(false);
   });

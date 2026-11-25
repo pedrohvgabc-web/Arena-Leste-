@@ -244,8 +244,8 @@ export function validateAdminManualRange(
   }
   const startMinutes = toMin(start);
   const endMinutes = toMin(end);
-  if (startMinutes < 13 * 60 || endMinutes > 24 * 60) {
-    return { ok: false, reason: "Reservas manuais podem ocorrer entre 13:00 e 24:00." };
+  if (startMinutes < 0 || endMinutes > 24 * 60) {
+    return { ok: false, reason: "Reservas manuais podem ocorrer entre 00:00 e 24:00." };
   }
   if (endMinutes <= startMinutes) {
     return { ok: false, reason: "O término precisa ser posterior ao início." };

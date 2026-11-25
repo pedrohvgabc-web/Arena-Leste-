@@ -45,6 +45,7 @@ type AdminAgendaGridProps = {
   bookings: AdminAgendaBooking[];
   spaces: AdminAgendaSpace[];
   schedules: AdminAgendaSchedule[];
+  onSelectBooking?: (booking: AdminAgendaBooking) => void;
 };
 
 type OpeningWindow = { start: string; end: string };
@@ -124,7 +125,13 @@ function bookingPresentation(booking: AdminAgendaBooking) {
   };
 }
 
-export function AdminAgendaGrid({ date, bookings, spaces, schedules }: AdminAgendaGridProps) {
+export function AdminAgendaGrid({
+  date,
+  bookings,
+  spaces,
+  schedules,
+  onSelectBooking,
+}: AdminAgendaGridProps) {
   const [unitId, setUnitId] = useState<UnitId>("unidade-1");
   const [showNonBlocking, setShowNonBlocking] = useState(false);
   const [rowHeight, setRowHeight] = useState(18);
@@ -333,16 +340,18 @@ export function AdminAgendaGrid({ date, bookings, spaces, schedules }: AdminAgen
                   );
                 const label = `${firstName(booking.name)} · ${range.start.slice(0, 5)}–${range.end.slice(0, 5)}`;
                 return (
-                  <article
+                  <button
+                    type="button"
                     key={`${booking.id}-${rangeIndex}`}
                     className={`admin-agenda-booking ${presentation.className} ${outsideOpening ? "is-outside-hours" : ""}`}
                     style={{ gridRow: `${rowStart} / ${rowEnd}`, gridColumn: columnIndex + 2 }}
                     aria-label={`${booking.name}, ${range.start.slice(0, 5)} às ${range.end.slice(0, 5)}, ${presentation.label}${outsideOpening ? ", fora da janela de funcionamento cadastrada" : ""}`}
                     title={`${booking.name} · ${range.start.slice(0, 5)}–${range.end.slice(0, 5)} · ${presentation.label}${outsideOpening ? " · Reserva fora da janela cadastrada" : ""}`}
+                    onClick={() => onSelectBooking?.(booking)}
                   >
                     <strong>{label}</strong>
                     <span>{presentation.label}</span>
-                  </article>
+                  </button>
                 );
               });
             })}

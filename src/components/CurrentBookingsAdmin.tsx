@@ -103,6 +103,17 @@ function shiftDate(iso: string, amount: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function shiftMonth(iso: string, amount: number) {
+  const date = new Date(`${iso.slice(0, 7)}-01T12:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function monthEnd(iso: string) {
+  const [year, month] = iso.slice(0, 7).split("-").map(Number);
+  return new Date(Date.UTC(year!, month!, 0, 12)).toISOString().slice(0, 10);
+}
+
 function formatSlotRanges(slots: Array<{ start: string; end: string }>) {
   const ranges: Array<[string, string]> = [];
   for (const slot of [...slots].sort((a, b) => a.start.localeCompare(b.start))) {
@@ -204,6 +215,69 @@ function groupBookings(rows: BookingRow[]): BookingGroup[] {
     );
 }
 
+function bookingPaymentSummary(booking: BookingGroup) {
+  const progress = paymentProgressPercentages(booking.amountCents, booking.receivedAmountCents);
+  const method = booking.paymentLabel.toLocaleLowerCase("pt-BR").includes("pix")
+    ? "PIX"
+    : booking.paymentLabel.includes("InfinitePay")
+      ? "InfinitePay"
+      : "Pagamento";
+  if (booking.isAdminManual) return "Bloqueio manual";
+  if (booking.paymentNeedsReview) return "Revisar pagamento";
+  if (booking.receivedAmountCents > 0) {
+    return booking.balanceDueCents > 0
+      ? `${method} pago ${progress.receivedPercentage}% · falta ${progress.remainingPercentage}%`
+      : `${method} · pago 100%`;
+  }
+  return STATUS_LABEL[booking.status];
+}
+
+function bookingDurationMinutes(booking: BookingGroup) {
+  return booking.slots.reduce(
+    (total, slot) => total + Math.max(0, toMin(slot.end) - toMin(slot.start)),
+    0,
+  );
+}
+
+function AgendaBookingButton({
+  booking,
+  onSelect,
+  compact = false,
+}: {
+  booking: BookingGroup;
+  onSelect: (booking: BookingGroup) => void;
+  compact?: boolean;
+}) {
+  const statusClass = booking.isAdminManual
+    ? "is-manual"
+    : booking.paymentNeedsReview
+      ? "is-review"
+      : booking.receivedAmountCents > 0 && booking.balanceDueCents > 0
+        ? "is-partial"
+        : booking.status === "paid"
+          ? "is-paid"
+          : "is-pending";
+  const duration = bookingDurationMinutes(booking);
+  const timeLabel = formatSlotRanges(booking.slots);
+  return (
+    <button
+      type="button"
+      className={`admin-agenda-event ${statusClass} ${compact ? "is-compact" : ""}`}
+      style={
+        compact ? undefined : { height: `${Math.min(156, Math.max(38, (duration / 60) * 46))}px` }
+      }
+      onClick={() => onSelect(booking)}
+      title={`${booking.name} · ${booking.spaceName} · ${timeLabel} · ${bookingPaymentSummary(booking)}`}
+    >
+      <strong>
+        {booking.name.trim().split(/\s+/u)[0]} · {timeLabel}
+      </strong>
+      {!compact && <span>{booking.spaceName}</span>}
+      <small>{bookingPaymentSummary(booking)}</small>
+    </button>
+  );
+}
+
 function formatBookingDate(iso: string) {
   return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" })
     .format(new Date(`${iso}T12:00:00Z`))
@@ -217,17 +291,19 @@ function formatBookingWeekday(iso: string) {
   }).format(new Date(`${iso}T12:00:00Z`));
 }
 
-const MANUAL_START_OPTIONS = Array.from({ length: 44 }, (_, index) => toHHMM(13 * 60 + index * 15));
-const MANUAL_END_OPTIONS = Array.from({ length: 44 }, (_, index) =>
-  toHHMM(13 * 60 + (index + 1) * 15),
-);
+const MANUAL_START_OPTIONS = Array.from({ length: 96 }, (_, index) => toHHMM(index * 15));
+const MANUAL_END_OPTIONS = Array.from({ length: 96 }, (_, index) => toHHMM((index + 1) * 15));
 
 export function CurrentBookingsAdmin({
   view = "agenda",
   isMaster = false,
+  manualFormOpen = false,
+  onManualFormOpenChange,
 }: {
   view?: "agenda" | "reservations";
   isMaster?: boolean;
+  manualFormOpen?: boolean;
+  onManualFormOpenChange?: (open: boolean) => void;
 }) {
   const fetchCurrentDay = useServerFn(adminCurrentDay);
   const fetchCurrentBookings = useServerFn(adminCurrentBookings);
@@ -236,25 +312,27 @@ export function CurrentBookingsAdmin({
   const updateBooking = useServerFn(adminUpdateBooking);
   const queryClient = useQueryClient();
   const [date, setDate] = useState(() => arenaNow().date);
-  const [agendaMode, setAgendaMode] = useState<"day" | "week">("day");
+  const [agendaMode, setAgendaMode] = useState<"day" | "week" | "month">("day");
   const [selectedBooking, setSelectedBooking] = useState<BookingGroup | null>(null);
   const [working, setWorking] = useState<string | null>(null);
   const [cancelBookingToConfirm, setCancelBookingToConfirm] = useState<BookingGroup | null>(null);
   const cancelDialogRef = useRef<HTMLDialogElement>(null);
+  const manualCreateDialogRef = useRef<HTMLDialogElement>(null);
+  const bookingDetailsDialogRef = useRef<HTMLDialogElement>(null);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | "all">("all");
   const [manualUnitId, setManualUnitId] = useState<UnitId>("unidade-1");
   const [manualSpaceId, setManualSpaceId] = useState("");
   const [manualDate, setManualDate] = useState(() => arenaNow().date);
-  const [manualStart, setManualStart] = useState("13:00");
-  const [manualEnd, setManualEnd] = useState("14:00");
+  const [manualStart, setManualStart] = useState("00:00");
+  const [manualEnd, setManualEnd] = useState("01:00");
   const [manualName, setManualName] = useState("");
   const [manualPhone, setManualPhone] = useState("");
   const [creatingManual, setCreatingManual] = useState(false);
   const arenaSettingsQuery = useQuery({
     queryKey: ["admin-arena-settings"],
     queryFn: () => fetchArenaSettings(),
-    enabled: view === "reservations" && isMaster,
+    enabled: isMaster && (view === "reservations" || manualFormOpen),
     retry: false,
   });
   const manualSpaces = useMemo(
@@ -268,8 +346,20 @@ export function CurrentBookingsAdmin({
   }, [manualSpaces, manualSpaceId]);
   const weekStart = shiftDate(date, -new Date(`${date}T12:00:00Z`).getUTCDay());
   const weekEnd = shiftDate(weekStart, 6);
-  const rangeStart = view === "agenda" && agendaMode === "week" ? weekStart : arenaNow().date;
-  const rangeEnd = view === "agenda" && agendaMode === "week" ? weekEnd : shiftDate(rangeStart, 60);
+  const monthStart = `${date.slice(0, 7)}-01`;
+  const monthLast = monthEnd(date);
+  const rangeStart =
+    view === "agenda" && agendaMode === "month"
+      ? monthStart
+      : view === "agenda" && agendaMode === "week"
+        ? weekStart
+        : arenaNow().date;
+  const rangeEnd =
+    view === "agenda" && agendaMode === "month"
+      ? monthLast
+      : view === "agenda" && agendaMode === "week"
+        ? weekEnd
+        : shiftDate(rangeStart, 60);
   const query = useQuery({
     queryKey:
       view === "agenda" && agendaMode === "day"
@@ -310,6 +400,18 @@ export function CurrentBookingsAdmin({
     if (cancelBookingToConfirm && !dialog.open) dialog.showModal();
     if (!cancelBookingToConfirm && dialog.open) dialog.close();
   }, [cancelBookingToConfirm]);
+  useEffect(() => {
+    const dialog = manualCreateDialogRef.current;
+    if (!dialog) return;
+    if (manualFormOpen && !dialog.open) dialog.showModal();
+    if (!manualFormOpen && dialog.open) dialog.close();
+  }, [manualFormOpen]);
+  useEffect(() => {
+    const dialog = bookingDetailsDialogRef.current;
+    if (!dialog) return;
+    if (selectedBooking && !dialog.open) dialog.showModal();
+    if (!selectedBooking && dialog.open) dialog.close();
+  }, [selectedBooking]);
   const attentionRequired = groups.filter(
     (booking) =>
       !booking.isAdminManual && (booking.status === "pending" || booking.paymentNeedsReview),
@@ -430,6 +532,7 @@ export function CurrentBookingsAdmin({
       }
       setManualName("");
       setManualPhone("");
+      onManualFormOpenChange?.(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["admin-current-day"] }),
         queryClient.invalidateQueries({ queryKey: ["admin-current-bookings"] }),
@@ -465,7 +568,9 @@ export function CurrentBookingsAdmin({
               {view === "agenda"
                 ? agendaMode === "day"
                   ? "Agenda diária"
-                  : "Agenda semanal"
+                  : agendaMode === "week"
+                    ? "Agenda semanal"
+                    : "Agenda mensal"
                 : "Gestão de reservas"}
             </p>
             <h2
@@ -491,6 +596,7 @@ export function CurrentBookingsAdmin({
                   [
                     ["day", "Dia"],
                     ["week", "Semana"],
+                    ["month", "Mês"],
                   ] as const
                 ).map(([mode, label]) => (
                   <button
@@ -507,9 +613,13 @@ export function CurrentBookingsAdmin({
               <button
                 type="button"
                 onClick={() =>
-                  setDate((current) => shiftDate(current, agendaMode === "week" ? -7 : -1))
+                  setDate((current) =>
+                    agendaMode === "month"
+                      ? shiftMonth(current, -1)
+                      : shiftDate(current, agendaMode === "week" ? -7 : -1),
+                  )
                 }
-                aria-label="Dia anterior"
+                aria-label={agendaMode === "month" ? "Mês anterior" : "Período anterior"}
                 className="grid h-11 w-11 place-items-center rounded-lg border border-border hover:border-primary"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -524,9 +634,13 @@ export function CurrentBookingsAdmin({
               <button
                 type="button"
                 onClick={() =>
-                  setDate((current) => shiftDate(current, agendaMode === "week" ? 7 : 1))
+                  setDate((current) =>
+                    agendaMode === "month"
+                      ? shiftMonth(current, 1)
+                      : shiftDate(current, agendaMode === "week" ? 7 : 1),
+                  )
                 }
-                aria-label="Próximo dia"
+                aria-label={agendaMode === "month" ? "Próximo mês" : "Próximo período"}
                 className="grid h-11 w-11 place-items-center rounded-lg border border-border hover:border-primary"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -584,77 +698,128 @@ export function CurrentBookingsAdmin({
             )}
             {view === "agenda" && agendaMode === "week" && (
               <div
-                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                className="admin-agenda-period-scroll"
                 aria-label="Agenda semanal, domingo a sábado"
               >
-                {Array.from({ length: 7 }, (_, index) => {
-                  const day = shiftDate(weekStart, index);
-                  const dayLabel = new Intl.DateTimeFormat("pt-BR", {
-                    weekday: "long",
-                    day: "2-digit",
-                    month: "short",
-                    timeZone: "UTC",
-                  }).format(new Date(`${day}T12:00:00Z`));
-                  const dayBookings = groups.filter((booking) => booking.date === day);
-                  return (
-                    <section
-                      key={day}
-                      className="min-h-32 rounded-xl border border-border bg-background p-3"
-                    >
-                      <h3 className="mb-2 border-b border-border pb-2 text-sm font-bold capitalize">
-                        {dayLabel}
-                      </h3>
-                      {dayBookings.length === 0 ? (
-                        <p className="py-2 text-xs text-muted-foreground">Sem reservas</p>
-                      ) : (
-                        <ul className="space-y-2">
-                          {dayBookings.map((booking) => {
-                            const progress = paymentProgressPercentages(
-                              booking.amountCents,
-                              booking.receivedAmountCents,
-                            );
-                            const paymentMethodLabel = booking.paymentLabel
-                              .toLocaleLowerCase("pt-BR")
-                              .includes("pix")
-                              ? "PIX"
-                              : booking.paymentLabel.includes("InfinitePay")
-                                ? "InfinitePay"
-                                : "Pagamento";
-                            const payStatus = booking.isAdminManual
-                              ? "Bloqueio manual"
-                              : booking.paymentNeedsReview
-                                ? "Revisar pagamento"
-                                : booking.receivedAmountCents > 0
-                                  ? booking.balanceDueCents > 0
-                                    ? `${paymentMethodLabel} pago ${progress.receivedPercentage}% · falta ${progress.remainingPercentage}%`
-                                    : `${paymentMethodLabel} · pago 100%`
-                                  : STATUS_LABEL[booking.status];
-                            return (
-                              <li key={booking.code}>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedBooking(booking)}
-                                  className="w-full rounded-lg border border-border px-3 py-2 text-left hover:border-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
-                                >
-                                  <span className="block font-semibold">
-                                    {booking.name.trim().split(/\s+/u)[0]} ·{" "}
-                                    {formatSlotRanges(booking.slots)}
-                                  </span>
-                                  <span className="block text-xs text-muted-foreground">
-                                    {booking.spaceName}
-                                  </span>
-                                  <span className="mt-1 block text-xs font-semibold">
-                                    {payStatus}
-                                  </span>
-                                </button>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      )}
-                    </section>
-                  );
-                })}
+                <div className="admin-agenda-week-grid">
+                  {Array.from({ length: 7 }, (_, index) => {
+                    const day = shiftDate(weekStart, index);
+                    const dayLabel = new Intl.DateTimeFormat("pt-BR", {
+                      weekday: "short",
+                      day: "2-digit",
+                      month: "short",
+                      timeZone: "UTC",
+                    }).format(new Date(`${day}T12:00:00Z`));
+                    const dayBookings = groups.filter(
+                      (booking) =>
+                        booking.date === day &&
+                        !["cancelled", "expired", "failed"].includes(booking.status),
+                    );
+                    return (
+                      <section key={day} className="admin-agenda-day-column">
+                        <button
+                          type="button"
+                          className="admin-agenda-day-heading"
+                          onClick={() => {
+                            setDate(day);
+                            setAgendaMode("day");
+                          }}
+                        >
+                          <span>{dayLabel}</span>
+                          <small>
+                            {dayBookings.length} reserva{dayBookings.length === 1 ? "" : "s"}
+                          </small>
+                        </button>
+                        <div className="admin-agenda-event-list">
+                          {dayBookings.length ? (
+                            dayBookings.map((booking) => (
+                              <AgendaBookingButton
+                                key={booking.code}
+                                booking={booking}
+                                onSelect={setSelectedBooking}
+                              />
+                            ))
+                          ) : (
+                            <p className="admin-agenda-empty-day">Sem reservas</p>
+                          )}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {view === "agenda" && agendaMode === "month" && (
+              <div className="admin-agenda-month-scroll" aria-label="Agenda mensal">
+                <div className="admin-agenda-month-grid">
+                  {[
+                    ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((day) => (
+                      <span key={day} className="admin-agenda-month-weekday">
+                        {day}
+                      </span>
+                    )),
+                  ]}
+                  {Array.from(
+                    {
+                      length:
+                        Math.ceil(
+                          (new Date(`${monthStart}T12:00:00Z`).getUTCDay() +
+                            Number(monthLast.slice(8, 10))) /
+                            7,
+                        ) * 7,
+                    },
+                    (_, index) => {
+                      const offset = new Date(`${monthStart}T12:00:00Z`).getUTCDay();
+                      const calendarDay = shiftDate(monthStart, index - offset);
+                      const inCurrentMonth = calendarDay.startsWith(monthStart.slice(0, 7));
+                      const dayBookings = groups.filter(
+                        (booking) =>
+                          booking.date === calendarDay &&
+                          !["cancelled", "expired", "failed"].includes(booking.status),
+                      );
+                      return (
+                        <section
+                          key={calendarDay}
+                          className={`admin-agenda-month-day ${inCurrentMonth ? "" : "is-outside-month"}`}
+                        >
+                          <button
+                            type="button"
+                            className="admin-agenda-month-date"
+                            disabled={!inCurrentMonth}
+                            onClick={() => {
+                              setDate(calendarDay);
+                              setAgendaMode("day");
+                            }}
+                          >
+                            {calendarDay.slice(8, 10)}
+                          </button>
+                          <div className="admin-agenda-month-events">
+                            {dayBookings.slice(0, 3).map((booking) => (
+                              <AgendaBookingButton
+                                key={booking.code}
+                                booking={booking}
+                                compact
+                                onSelect={setSelectedBooking}
+                              />
+                            ))}
+                            {dayBookings.length > 3 && (
+                              <button
+                                type="button"
+                                className="admin-agenda-month-more"
+                                onClick={() => {
+                                  setDate(calendarDay);
+                                  setAgendaMode("day");
+                                }}
+                              >
+                                +{dayBookings.length - 3} mais
+                              </button>
+                            )}
+                          </div>
+                        </section>
+                      );
+                    },
+                  )}
+                </div>
               </div>
             )}
             {view === "agenda" && agendaMode === "day" && (
@@ -663,172 +828,25 @@ export function CurrentBookingsAdmin({
                 bookings={agendaBookings}
                 spaces={agendaData?.spaces ?? []}
                 schedules={agendaData?.schedules ?? []}
+                onSelectBooking={(booking) => {
+                  const selected = groups.find((item) => item.id === booking.id);
+                  if (selected) setSelectedBooking(selected);
+                }}
               />
             )}
             {view === "reservations" && isMaster && (
-              <section
-                className="mb-6 rounded-2xl border border-primary/35 bg-primary/5 p-4 sm:p-5"
-                aria-labelledby="manual-booking-heading"
-              >
-                <div className="flex items-start gap-3">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Plus className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <div>
-                    <h3
-                      id="manual-booking-heading"
-                      className="font-display text-xl font-bold uppercase"
-                    >
-                      Criar reserva manual
-                    </h3>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                      Exclusivo do Admin Master. O bloqueio entra na agenda imediatamente, sem criar
-                      cobrança nem registrar pagamento.
-                    </p>
-                  </div>
+              <section className="admin-manual-entry" aria-labelledby="manual-booking-heading">
+                <div>
+                  <h3 id="manual-booking-heading">Criar reserva manual</h3>
+                  <p>Exclusivo do Master · sem cobrança nem pagamento fictício.</p>
                 </div>
-                <p className="mt-3 rounded-xl border border-warning/30 bg-warning/5 p-3 text-xs leading-relaxed text-warning">
-                  Se houver um checkout público em andamento para o mesmo horário, um pagamento
-                  validado depois ficará para revisão e eventual estorno manual.
-                </p>
-                {arenaSettingsQuery.isError ? (
-                  <p role="alert" className="mt-3 text-sm text-destructive">
-                    Não foi possível carregar as quadras. Atualize a aba e tente novamente.
-                  </p>
-                ) : (
-                  <form
-                    onSubmit={submitManualBooking}
-                    className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"
-                  >
-                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Unidade
-                      <select
-                        value={manualUnitId}
-                        onChange={(event) => setManualUnitId(event.target.value as UnitId)}
-                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
-                      >
-                        {SITE.units.map((unit) => (
-                          <option key={unit.id} value={unit.id}>
-                            {unit.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Quadra
-                      <select
-                        required
-                        value={manualSpaceId}
-                        onChange={(event) => setManualSpaceId(event.target.value)}
-                        disabled={arenaSettingsQuery.isLoading || manualSpaces.length === 0}
-                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground disabled:opacity-60"
-                      >
-                        {manualSpaces.length ? (
-                          manualSpaces.map((space) => (
-                            <option key={space.id} value={space.id}>
-                              {space.name}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="">Nenhuma quadra cadastrada</option>
-                        )}
-                      </select>
-                    </label>
-                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Data
-                      <input
-                        required
-                        type="date"
-                        min={rangeStart}
-                        value={manualDate}
-                        onChange={(event) => setManualDate(event.target.value)}
-                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
-                      />
-                    </label>
-                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Início
-                      <select
-                        value={manualStart}
-                        onChange={(event) => {
-                          const nextStart = event.target.value;
-                          setManualStart(nextStart);
-                          if (toMin(manualEnd) <= toMin(nextStart)) {
-                            setManualEnd(
-                              MANUAL_END_OPTIONS.find((time) => toMin(time) > toMin(nextStart)) ??
-                                "24:00",
-                            );
-                          }
-                        }}
-                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
-                      >
-                        {MANUAL_START_OPTIONS.map((time) => (
-                          <option key={time} value={time}>
-                            {time}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Término
-                      <select
-                        value={manualEnd}
-                        onChange={(event) => setManualEnd(event.target.value)}
-                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
-                      >
-                        {MANUAL_END_OPTIONS.filter((time) => toMin(time) > toMin(manualStart)).map(
-                          (time) => (
-                            <option key={time} value={time}>
-                              {time}
-                            </option>
-                          ),
-                        )}
-                      </select>
-                    </label>
-                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Nome
-                      <input
-                        required
-                        minLength={2}
-                        maxLength={80}
-                        value={manualName}
-                        onChange={(event) => setManualName(event.target.value)}
-                        autoComplete="name"
-                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground"
-                      />
-                    </label>
-                    <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      Telefone / WhatsApp
-                      <input
-                        required
-                        type="tel"
-                        maxLength={30}
-                        value={manualPhone}
-                        onChange={(event) => setManualPhone(event.target.value)}
-                        autoComplete="tel"
-                        placeholder="(69) 99999-1234"
-                        className="mt-1.5 min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm font-normal normal-case tracking-normal text-foreground placeholder:text-muted-foreground"
-                      />
-                    </label>
-                    <div className="flex items-end sm:col-span-2 xl:col-span-4">
-                      <button
-                        type="submit"
-                        disabled={
-                          creatingManual ||
-                          arenaSettingsQuery.isLoading ||
-                          manualSpaces.length === 0
-                        }
-                        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold text-primary-foreground disabled:cursor-wait disabled:opacity-60 sm:w-auto"
-                      >
-                        {creatingManual ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Plus className="h-4 w-4" />
-                        )}
-                        Criar e bloquear horário
-                      </button>
-                    </div>
-                  </form>
-                )}
+                <button
+                  type="button"
+                  className="admin-manual-entry-button"
+                  onClick={() => onManualFormOpenChange?.(true)}
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" /> Nova reserva
+                </button>
               </section>
             )}
             {view === "reservations" && (
@@ -865,238 +883,458 @@ export function CurrentBookingsAdmin({
                 </label>
               </div>
             )}
-            <p className="mb-3 text-xs text-muted-foreground" aria-live="polite">
-              Mostrando {filteredGroups.length} de {groups.length} reservas{" "}
-              {view === "agenda" ? "nesta data" : "neste período"}.
-            </p>
-            {groups.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center">
-                <Clock3 className="mx-auto h-6 w-6 text-muted-foreground" />
-                <p className="mt-3 font-semibold">
-                  Nenhuma reserva {view === "agenda" ? "nesta data" : "neste período"}
+            {view === "reservations" && (
+              <>
+                <p className="mb-3 text-xs text-muted-foreground" aria-live="polite">
+                  Mostrando {filteredGroups.length} de {groups.length} reservas neste período.
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Reservas confirmadas, checkouts e bloqueios manuais aparecerão aqui.
-                </p>
-              </div>
-            ) : filteredGroups.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">
-                Nenhuma reserva corresponde à busca ou ao status selecionado.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {filteredGroups.map((booking) => {
-                  const paymentProgress = paymentProgressPercentages(
-                    booking.amountCents,
-                    booking.receivedAmountCents,
-                  );
-                  const statusLabel = booking.isAdminManual
-                    ? "Bloqueio manual · ativo"
-                    : booking.paymentNeedsReview
-                      ? "Pagamento recebido · revisar"
-                      : booking.paymentLabel.includes("InfinitePay") &&
-                          booking.receivedAmountCents > 0
-                        ? booking.balanceDueCents > 0
-                          ? `Pago ${paymentProgress.receivedPercentage}% · falta ${paymentProgress.remainingPercentage}%`
-                          : "Pago 100% · verificado"
-                        : STATUS_LABEL[booking.status];
-                  const unitNumber = booking.unitId === "unidade-1" ? "1" : "2";
-                  const message = `Olá, ${booking.name.split(" ")[0]}, sobre a sua reserva na Arena Leste ${unitNumber}, ${formatBookingWeekday(booking.date)}, dia ${booking.date.split("-").reverse().join("/")}, das ${formatSlotRanges(booking.slots)}.`;
-                  return (
-                    <li
-                      key={booking.code}
-                      className="rounded-2xl border border-border bg-background p-4 sm:p-5"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{booking.name}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {view === "reservations" ? `${formatBookingDate(booking.date)} · ` : ""}
-                            {booking.spaceName} · {formatSlotRanges(booking.slots)}
-                          </p>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {booking.phone} · {booking.paymentLabel} · Código {booking.code}
-                          </p>
-                        </div>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${booking.isAdminManual ? "bg-primary/10 text-primary" : BADGE[booking.status]}`}
+                {groups.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center">
+                    <Clock3 className="mx-auto h-6 w-6 text-muted-foreground" />
+                    <p className="mt-3 font-semibold">Nenhuma reserva neste período</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Reservas confirmadas, checkouts e bloqueios manuais aparecerão aqui.
+                    </p>
+                  </div>
+                ) : filteredGroups.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">
+                    Nenhuma reserva corresponde à busca ou ao status selecionado.
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {filteredGroups.map((booking) => {
+                      const paymentProgress = paymentProgressPercentages(
+                        booking.amountCents,
+                        booking.receivedAmountCents,
+                      );
+                      const statusLabel = booking.isAdminManual
+                        ? "Bloqueio manual · ativo"
+                        : booking.paymentNeedsReview
+                          ? "Pagamento recebido · revisar"
+                          : booking.paymentLabel.includes("InfinitePay") &&
+                              booking.receivedAmountCents > 0
+                            ? booking.balanceDueCents > 0
+                              ? `Pago ${paymentProgress.receivedPercentage}% · falta ${paymentProgress.remainingPercentage}%`
+                              : "Pago 100% · verificado"
+                            : STATUS_LABEL[booking.status];
+                      const unitNumber = booking.unitId === "unidade-1" ? "1" : "2";
+                      const message = `Olá, ${booking.name.split(" ")[0]}, sobre a sua reserva na Arena Leste ${unitNumber}, ${formatBookingWeekday(booking.date)}, dia ${booking.date.split("-").reverse().join("/")}, das ${formatSlotRanges(booking.slots)}.`;
+                      return (
+                        <li
+                          key={booking.code}
+                          className="rounded-2xl border border-border bg-background p-4 sm:p-5"
                         >
-                          {statusLabel}
-                        </span>
-                      </div>
-                      {booking.paymentNeedsReview && (
-                        <p
-                          role="alert"
-                          className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-semibold text-warning"
-                        >
-                          Pagamento recebido, mas a reserva não foi confirmada automaticamente. Use
-                          a confirmação após revisão somente se o horário ainda não terminou e
-                          continua livre; caso contrário, contate o cliente e trate eventual estorno
-                          na InfinitePay.
-                        </p>
-                      )}
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-                        <div>
-                          <strong className="font-display text-xl">
-                            {booking.isAdminManual
-                              ? "Bloqueio manual · sem pagamento"
-                              : `Reserva: ${formatBRL(booking.amountCents)}`}
-                          </strong>
-                          {!booking.isAdminManual &&
-                          booking.paymentLabel.includes("InfinitePay") ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {booking.receivedAmountCents > 0
-                                ? `${booking.paymentNeedsReview ? "Pagamento recebido · revisão necessária" : `Recebido ${paymentProgress.receivedPercentage}%`}: ${formatBRL(booking.receivedAmountCents)}${booking.balanceDueCents > 0 ? ` · Falta pagar ${paymentProgress.remainingPercentage}% do valor da reserva: ${formatBRL(booking.balanceDueCents)}` : " · Pago integralmente"}`
-                                : `Cobrança pendente: ${formatBRL(booking.chargeAmountCents)} · total: ${formatBRL(booking.amountCents)} · após a cobrança, restará ${formatBRL(booking.expectedBalanceDueCents)}`}
-                            </p>
-                          ) : !booking.isAdminManual && booking.balanceDueCents > 0 ? (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {booking.receivedAmountCents > 0
-                                ? "Entrada recebida"
-                                : "Entrada no checkout"}
-                              : {formatBRL(booking.chargeAmountCents)} · saldo:{" "}
-                              {formatBRL(booking.balanceDueCents)}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={`https://wa.me/55${booking.phone}?text=${encodeURIComponent(message)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm font-semibold hover:border-primary hover:text-primary"
-                          >
-                            <MessageCircle className="h-4 w-4" /> Contatar
-                          </a>
-                          {!booking.isAdminManual && booking.paymentNeedsReview && (
-                            <button
-                              type="button"
-                              disabled={working === booking.code}
-                              onClick={() => act(booking, "confirm_received_payment")}
-                              className="inline-flex min-h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-bold text-success-foreground disabled:opacity-50"
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">{booking.name}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {view === "reservations"
+                                  ? `${formatBookingDate(booking.date)} · `
+                                  : ""}
+                                {booking.spaceName} · {formatSlotRanges(booking.slots)}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {booking.phone} · {booking.paymentLabel} · Código {booking.code}
+                              </p>
+                            </div>
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-bold ${booking.isAdminManual ? "bg-primary/10 text-primary" : BADGE[booking.status]}`}
                             >
-                              {working === booking.code ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Check className="h-4 w-4" />
-                              )}{" "}
-                              Confirmar reserva após revisão
-                            </button>
+                              {statusLabel}
+                            </span>
+                          </div>
+                          {booking.paymentNeedsReview && (
+                            <p
+                              role="alert"
+                              className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm font-semibold text-warning"
+                            >
+                              Pagamento recebido, mas a reserva não foi confirmada automaticamente.
+                              Use a confirmação após revisão somente se o horário ainda não terminou
+                              e continua livre; caso contrário, contate o cliente e trate eventual
+                              estorno na InfinitePay.
+                            </p>
                           )}
-                          {booking.status === "pending" &&
-                            !booking.paymentNeedsReview &&
-                            !booking.isAdminManual && (
-                              <button
-                                type="button"
-                                disabled={working === booking.code}
-                                onClick={() => act(booking, "mark_paid")}
-                                className="inline-flex min-h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-bold text-success-foreground disabled:opacity-50"
+                          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                            <div>
+                              <strong className="font-display text-xl">
+                                {booking.isAdminManual
+                                  ? "Bloqueio manual · sem pagamento"
+                                  : `Reserva: ${formatBRL(booking.amountCents)}`}
+                              </strong>
+                              {!booking.isAdminManual &&
+                              booking.paymentLabel.includes("InfinitePay") ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {booking.receivedAmountCents > 0
+                                    ? `${booking.paymentNeedsReview ? "Pagamento recebido · revisão necessária" : `Recebido ${paymentProgress.receivedPercentage}%`}: ${formatBRL(booking.receivedAmountCents)}${booking.balanceDueCents > 0 ? ` · Falta pagar ${paymentProgress.remainingPercentage}% do valor da reserva: ${formatBRL(booking.balanceDueCents)}` : " · Pago integralmente"}`
+                                    : `Cobrança pendente: ${formatBRL(booking.chargeAmountCents)} · total: ${formatBRL(booking.amountCents)} · após a cobrança, restará ${formatBRL(booking.expectedBalanceDueCents)}`}
+                                </p>
+                              ) : !booking.isAdminManual && booking.balanceDueCents > 0 ? (
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {booking.receivedAmountCents > 0
+                                    ? "Entrada recebida"
+                                    : "Entrada no checkout"}
+                                  : {formatBRL(booking.chargeAmountCents)} · saldo:{" "}
+                                  {formatBRL(booking.balanceDueCents)}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <a
+                                href={`https://wa.me/55${booking.phone}?text=${encodeURIComponent(message)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border px-4 text-sm font-semibold hover:border-primary hover:text-primary"
                               >
-                                {working === booking.code ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Check className="h-4 w-4" />
-                                )}{" "}
-                                Confirmar pagamento
-                              </button>
-                            )}
-                          {(booking.status === "pending" || booking.status === "paid") && (
-                            <button
-                              type="button"
-                              disabled={working === booking.code}
-                              onClick={() => act(booking, "cancel")}
-                              className="inline-flex min-h-10 items-center gap-2 rounded-full border border-destructive/40 px-4 text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                            >
-                              <X className="h-4 w-4" /> Cancelar grupo
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                                <MessageCircle className="h-4 w-4" /> Contatar
+                              </a>
+                              {!booking.isAdminManual && booking.paymentNeedsReview && (
+                                <button
+                                  type="button"
+                                  disabled={working === booking.code}
+                                  onClick={() => act(booking, "confirm_received_payment")}
+                                  className="inline-flex min-h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-bold text-success-foreground disabled:opacity-50"
+                                >
+                                  {working === booking.code ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}{" "}
+                                  Confirmar reserva após revisão
+                                </button>
+                              )}
+                              {booking.status === "pending" &&
+                                !booking.paymentNeedsReview &&
+                                !booking.isAdminManual && (
+                                  <button
+                                    type="button"
+                                    disabled={working === booking.code}
+                                    onClick={() => act(booking, "mark_paid")}
+                                    className="inline-flex min-h-10 items-center gap-2 rounded-full bg-success px-4 text-sm font-bold text-success-foreground disabled:opacity-50"
+                                  >
+                                    {working === booking.code ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Check className="h-4 w-4" />
+                                    )}{" "}
+                                    Confirmar pagamento
+                                  </button>
+                                )}
+                              {(booking.status === "pending" || booking.status === "paid") && (
+                                <button
+                                  type="button"
+                                  disabled={working === booking.code}
+                                  onClick={() => act(booking, "cancel")}
+                                  className="inline-flex min-h-10 items-center gap-2 rounded-full border border-destructive/40 px-4 text-sm font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                                >
+                                  <X className="h-4 w-4" /> Cancelar grupo
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
             )}
           </>
         )}
       </div>
+      {isMaster && (
+        <dialog
+          ref={manualCreateDialogRef}
+          className="admin-manual-dialog"
+          aria-labelledby="manual-create-dialog-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            onManualFormOpenChange?.(false);
+          }}
+          onClose={() => onManualFormOpenChange?.(false)}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) onManualFormOpenChange?.(false);
+          }}
+        >
+          <div className="admin-manual-dialog-inner">
+            <header className="admin-manual-dialog-header">
+              <div>
+                <p>Somente Admin Master</p>
+                <h2 id="manual-create-dialog-title">Nova reserva manual</h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Fechar formulário"
+                onClick={() => onManualFormOpenChange?.(false)}
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </header>
+            <p className="admin-manual-warning">
+              O horário será bloqueado sem cobrança. Se existir checkout público em andamento, um
+              pagamento validado depois precisará de revisão manual.
+            </p>
+            {arenaSettingsQuery.isError ? (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                Não foi possível carregar as quadras. Atualize o painel e tente novamente.
+              </p>
+            ) : (
+              <form onSubmit={submitManualBooking} className="admin-manual-form">
+                <label>
+                  Nome
+                  <input
+                    required
+                    minLength={2}
+                    maxLength={80}
+                    value={manualName}
+                    onChange={(event) => setManualName(event.target.value)}
+                    autoComplete="name"
+                  />
+                </label>
+                <label>
+                  Número / WhatsApp
+                  <input
+                    required
+                    type="tel"
+                    maxLength={30}
+                    value={manualPhone}
+                    onChange={(event) => setManualPhone(event.target.value)}
+                    autoComplete="tel"
+                    placeholder="(69) 99999-1234"
+                  />
+                </label>
+                <label>
+                  Unidade
+                  <select
+                    value={manualUnitId}
+                    onChange={(event) => setManualUnitId(event.target.value as UnitId)}
+                  >
+                    {SITE.units.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Quadra
+                  <select
+                    required
+                    value={manualSpaceId}
+                    onChange={(event) => setManualSpaceId(event.target.value)}
+                    disabled={arenaSettingsQuery.isLoading || manualSpaces.length === 0}
+                  >
+                    {manualSpaces.length ? (
+                      manualSpaces.map((space) => (
+                        <option key={space.id} value={space.id}>
+                          {space.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Nenhuma quadra cadastrada</option>
+                    )}
+                  </select>
+                </label>
+                <label>
+                  Data
+                  <input
+                    required
+                    type="date"
+                    min={arenaNow().date}
+                    value={manualDate}
+                    onChange={(event) => setManualDate(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Início
+                  <select
+                    value={manualStart}
+                    onChange={(event) => {
+                      const nextStart = event.target.value;
+                      setManualStart(nextStart);
+                      if (toMin(manualEnd) <= toMin(nextStart)) {
+                        setManualEnd(
+                          MANUAL_END_OPTIONS.find((time) => toMin(time) > toMin(nextStart)) ??
+                            "24:00",
+                        );
+                      }
+                    }}
+                  >
+                    {MANUAL_START_OPTIONS.map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Término
+                  <select value={manualEnd} onChange={(event) => setManualEnd(event.target.value)}>
+                    {MANUAL_END_OPTIONS.filter((time) => toMin(time) > toMin(manualStart)).map(
+                      (time) => (
+                        <option key={time} value={time}>
+                          {time}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </label>
+                <div className="admin-manual-form-actions">
+                  <button
+                    type="button"
+                    className="admin-dialog-cancel"
+                    onClick={() => onManualFormOpenChange?.(false)}
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      creatingManual || arenaSettingsQuery.isLoading || manualSpaces.length === 0
+                    }
+                    className="admin-manual-submit"
+                  >
+                    {creatingManual ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Criar e bloquear
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </dialog>
+      )}
       {selectedBooking && (
         <dialog
-          open
+          ref={bookingDetailsDialogRef}
           aria-labelledby="booking-details-title"
+          aria-describedby="booking-details-summary"
+          onCancel={(event) => {
+            event.preventDefault();
+            setSelectedBooking(null);
+          }}
+          onClose={() => setSelectedBooking(null)}
           onClick={(event) => {
             if (event.target === event.currentTarget) setSelectedBooking(null);
           }}
-          className="fixed inset-0 z-50 m-auto max-h-[85vh] w-[min(92vw,36rem)] overflow-auto rounded-2xl border border-border bg-background p-5 text-foreground shadow-2xl backdrop:bg-black/70"
+          className="admin-booking-details-dialog"
         >
-          <h2 id="booking-details-title" className="font-display text-2xl font-bold">
-            {selectedBooking.name}
-          </h2>
-          <p className="mt-2 text-sm">
-            {selectedBooking.phone} · {selectedBooking.code}
-          </p>
-          <p className="mt-1 text-sm">
-            {formatBookingDate(selectedBooking.date)} · {selectedBooking.spaceName} ·{" "}
-            {formatSlotRanges(selectedBooking.slots)}
-          </p>
-          <p className="mt-2 text-sm">
-            {selectedBooking.paymentLabel} ·{" "}
-            {selectedBooking.isAdminManual
-              ? "Bloqueio manual"
-              : selectedBooking.paymentNeedsReview
-                ? "Pagamento para revisão"
-                : selectedBooking.balanceDueCents > 0
-                  ? `Recebido ${formatBRL(selectedBooking.receivedAmountCents)} · saldo ${formatBRL(selectedBooking.balanceDueCents)}`
-                  : selectedBooking.status === "paid"
-                    ? "Pago 100%"
-                    : STATUS_LABEL[selectedBooking.status]}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {selectedBooking.paymentNeedsReview && (
+          <div className="admin-details-inner">
+            <header className="admin-details-header">
+              <div>
+                <p>Detalhes da reserva</p>
+                <h2 id="booking-details-title">{selectedBooking.name}</h2>
+              </div>
               <button
                 type="button"
-                onClick={() => {
-                  void act(selectedBooking, "confirm_received_payment");
-                  setSelectedBooking(null);
-                }}
-                className="rounded-full bg-success px-4 py-2 text-sm font-bold text-success-foreground"
+                aria-label="Fechar detalhes"
+                onClick={() => setSelectedBooking(null)}
               >
-                Confirmar após revisão
+                <X className="h-5 w-5" aria-hidden="true" />
               </button>
-            )}
-            {selectedBooking.status === "pending" &&
-              !selectedBooking.paymentNeedsReview &&
-              !selectedBooking.isAdminManual && (
+            </header>
+            <dl id="booking-details-summary" className="admin-details-list">
+              <div>
+                <dt>Data</dt>
+                <dd>
+                  {formatBookingDate(selectedBooking.date)} ·{" "}
+                  {formatBookingWeekday(selectedBooking.date)}
+                </dd>
+              </div>
+              <div>
+                <dt>Unidade e quadra</dt>
+                <dd>{selectedBooking.spaceName}</dd>
+              </div>
+              <div>
+                <dt>Horário</dt>
+                <dd>{formatSlotRanges(selectedBooking.slots)}</dd>
+              </div>
+              <div>
+                <dt>Contato</dt>
+                <dd>{selectedBooking.phone}</dd>
+              </div>
+              <div>
+                <dt>Pagamento</dt>
+                <dd>
+                  {bookingPaymentSummary(selectedBooking)} · {selectedBooking.paymentLabel}
+                </dd>
+              </div>
+              <div>
+                <dt>Valor recebido</dt>
+                <dd>
+                  {selectedBooking.isAdminManual
+                    ? "Sem pagamento · bloqueio manual"
+                    : formatBRL(selectedBooking.receivedAmountCents)}
+                </dd>
+              </div>
+              {selectedBooking.balanceDueCents > 0 && (
+                <div>
+                  <dt>Saldo pendente</dt>
+                  <dd>{formatBRL(selectedBooking.balanceDueCents)}</dd>
+                </div>
+              )}
+              <div>
+                <dt>Código</dt>
+                <dd>{selectedBooking.code}</dd>
+              </div>
+            </dl>
+            <div className="admin-details-actions">
+              <a
+                href={`https://wa.me/55${selectedBooking.phone}?text=${encodeURIComponent(`Olá, ${selectedBooking.name.split(" ")[0]}, sobre a sua reserva na Arena Leste, ${formatBookingWeekday(selectedBooking.date)}, dia ${selectedBooking.date.split("-").reverse().join("/")}, das ${formatSlotRanges(selectedBooking.slots)}.`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-details-contact"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden="true" /> Contatar no WhatsApp
+              </a>
+              {selectedBooking.paymentNeedsReview && (
                 <button
                   type="button"
                   onClick={() => {
-                    void act(selectedBooking, "mark_paid");
+                    void act(selectedBooking, "confirm_received_payment");
                     setSelectedBooking(null);
                   }}
                   className="rounded-full bg-success px-4 py-2 text-sm font-bold text-success-foreground"
                 >
-                  Confirmar pagamento
+                  Confirmar após revisão
                 </button>
               )}
-            {(selectedBooking.status === "pending" || selectedBooking.status === "paid") && (
+              {selectedBooking.status === "pending" &&
+                !selectedBooking.paymentNeedsReview &&
+                !selectedBooking.isAdminManual && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void act(selectedBooking, "mark_paid");
+                      setSelectedBooking(null);
+                    }}
+                    className="rounded-full bg-success px-4 py-2 text-sm font-bold text-success-foreground"
+                  >
+                    Confirmar pagamento
+                  </button>
+                )}
+              {(selectedBooking.status === "pending" || selectedBooking.status === "paid") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void act(selectedBooking, "cancel");
+                    setSelectedBooking(null);
+                  }}
+                  className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-semibold text-destructive"
+                >
+                  Cancelar grupo
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  void act(selectedBooking, "cancel");
-                  setSelectedBooking(null);
-                }}
-                className="rounded-full border border-destructive/40 px-4 py-2 text-sm font-semibold text-destructive"
+                onClick={() => setSelectedBooking(null)}
+                className="admin-dialog-cancel"
               >
-                Cancelar grupo
+                Fechar
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setSelectedBooking(null)}
-              className="rounded-full border border-border px-4 py-2 text-sm"
-            >
-              Fechar
-            </button>
+            </div>
           </div>
         </dialog>
       )}
